@@ -111,7 +111,7 @@ class PdfService {
                       child: pw.Transform.rotate(
                         angle: 0.6,
                         child: pw.Text(
-                          watermark ?? '',
+                          watermark,
                           style: pw.TextStyle(
                             fontSize: 88,
                             fontWeight: pw.FontWeight.bold,

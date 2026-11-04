@@ -46,30 +46,27 @@ class BackupService {
         .substring(0, 16)
         .replaceAll(':', 'h')
         .replaceAll('T', '_');
-    return FilePicker.platform.saveFile(
+    final uri = await FilePicker.saveFile(
       dialogTitle: 'Enregistrer la sauvegarde',
       fileName: 'MCSV_sauvegarde_$stamp.json',
-      type: FileType.custom,
-      allowedExtensions: ['json'],
+      mimeType: 'application/json',
       bytes: bytes,
     );
+    return uri?.toString();
   }
 
   /// Choisit un fichier de sauvegarde et remplace les données actuelles.
   /// Renvoie false si l'utilisateur annule. Lève une exception si le
   /// fichier n'est pas valide (les données actuelles restent intactes).
   Future<bool> restoreFromDevice() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.any,
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return false;
-    final file = result.files.first;
-    var bytes = file.bytes;
-    if (bytes == null && file.path != null) {
-      bytes = await File(file.path!).readAsBytes();
+    final file = await FilePicker.pickFile(type: FileType.any);
+    if (file == null) return false;
+    final Uint8List bytes;
+    try {
+      bytes = await file.readAsBytes();
+    } catch (_) {
+      throw const FormatException('Fichier illisible.');
     }
-    if (bytes == null) throw const FormatException('Fichier illisible.');
     await restore(bytes);
     return true;
   }

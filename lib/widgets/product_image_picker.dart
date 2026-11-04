@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -72,19 +70,13 @@ class ImagePickerHelper {
     if (source == null) return null;
     try {
       if (source == 'files') {
-        final result = await FilePicker.platform.pickFiles(
+        final f = await FilePicker.pickFile(
           type: FileType.custom,
           allowedExtensions: ['jpg', 'jpeg', 'png'],
-          withData: true,
         );
-        if (result == null || result.files.isEmpty) return null;
-        final f = result.files.first;
-        var bytes = f.bytes;
-        if (bytes == null && f.path != null) {
-          bytes = await File(f.path!).readAsBytes();
-        }
-        if (bytes == null) return null;
-        return AppPaths.savePhoto(bytes, f.extension ?? 'jpg');
+        if (f == null) return null;
+        final bytes = await f.readAsBytes();
+        return await AppPaths.savePhoto(bytes, f.extension ?? 'jpg');
       }
       final x = await ImagePicker().pickImage(
         source: source == 'camera' ? ImageSource.camera : ImageSource.gallery,
@@ -96,7 +88,7 @@ class ImagePickerHelper {
       final bytes = await x.readAsBytes();
       final name = x.name.toLowerCase();
       final ext = name.endsWith('.png') ? 'png' : 'jpg';
-      return AppPaths.savePhoto(bytes, ext);
+      return await AppPaths.savePhoto(bytes, ext);
     } catch (e) {
       if (context.mounted) {
         showMessage(context, 'Impossible de charger la photo : $e',

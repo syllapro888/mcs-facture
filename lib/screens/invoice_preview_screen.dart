@@ -191,11 +191,10 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
                   onTap: _busy
                       ? null
                       : () => _run((b) async {
-                            final path = await FilePicker.platform.saveFile(
+                            final path = await FilePicker.saveFile(
                               dialogTitle: 'Enregistrer le PDF',
                               fileName: _fileName,
-                              type: FileType.custom,
-                              allowedExtensions: ['pdf'],
+                              mimeType: 'application/pdf',
                               bytes: b,
                             );
                             if (path != null && mounted) {

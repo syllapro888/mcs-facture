@@ -19,7 +19,7 @@ dependencies:
   pdf: any
   printing: any
   image_picker: any
-  file_picker: any
+  file_picker: ^13.3.0
 
 dev_dependencies:
   flutter_test:

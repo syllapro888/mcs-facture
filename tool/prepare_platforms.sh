@@ -28,10 +28,10 @@ if [ -f "$PLIST" ]; then
     PB=/usr/libexec/PlistBuddy
     set_key() { # clé type valeur
       $PB -c "Delete :$1" "$PLIST" >/dev/null 2>&1 || true
-      $PB -c "Add :$1 $2 $3" "$PLIST"
+      $PB -c "Add :$1 $2 \"$3\"" "$PLIST"
     }
     set_key CFBundleDisplayName string "$NAME"
-    set_key NSPhotoLibraryUsageDescription string "Choisir les photos des produits et le logo de l'entreprise."
+    set_key NSPhotoLibraryUsageDescription string "Choisir les photos des produits et le logo de l’entreprise."
     set_key NSCameraUsageDescription string "Prendre en photo les produits à ajouter aux factures."
     set_key NSPhotoLibraryAddUsageDescription string "Enregistrer des images dans la photothèque."
     set_key UIFileSharingEnabled bool true
