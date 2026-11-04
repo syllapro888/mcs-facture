@@ -48,9 +48,18 @@ jobs:
           path: build/test_pdf/*.pdf
 
       - name: Clé de signature (toujours la même, pour mettre à jour l'app)
+        env:
+          KEY_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
         run: |
           mkdir -p ~/.android
-          base64 -d .ci/signing-key.b64 > ~/.android/debug.keystore
+          if [ -n "$KEY_B64" ]; then
+            printf '%s' "$KEY_B64" | tr -d ' \r\n' | base64 -d > ~/.android/debug.keystore
+          elif [ -f .ci/signing-key.b64 ]; then
+            base64 -d .ci/signing-key.b64 > ~/.android/debug.keystore
+          else
+            echo "::error::Le secret ANDROID_KEYSTORE_B64 est manquant (Settings > Secrets > Actions)."
+            exit 1
+          fi
 
       - name: Construire l'APK
         run: flutter build apk --release --build-name=1.0.${{ github.run_number }} --build-number=${{ github.run_number }}
