@@ -25,8 +25,10 @@ class UpdateCheckResult {
   final String currentVersion;
   final UpdateInfo? update; // null = déjà à jour
   final String? error; // message compréhensible si la vérification échoue
+  final bool privateRepo; // dépôt privé : on passe par la page GitHub
 
-  const UpdateCheckResult(this.currentVersion, {this.update, this.error});
+  const UpdateCheckResult(this.currentVersion,
+      {this.update, this.error, this.privateRepo = false});
 
   bool get hasUpdate => update != null;
 }
@@ -81,8 +83,8 @@ class UpdateService {
       final body = await res.transform(utf8.decoder).join();
       if (res.statusCode == 404) {
         return UpdateCheckResult(current,
-            error: 'Les mises à jour ne sont pas accessibles '
-                '(le dépôt GitHub est privé).');
+            privateRepo: true,
+            error: 'Mises à jour sur la page GitHub privée.');
       }
       if (res.statusCode != 200) {
         return UpdateCheckResult(current,

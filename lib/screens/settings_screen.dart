@@ -302,7 +302,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               OutlinedButton.icon(
                 onPressed: () => UpdateUi.checkManually(context),
                 icon: const Icon(Icons.system_update),
-                label: const Text('Vérifier les mises à jour'),
+                label: const Text('Mettre à jour l’application'),
               ),
               _title('Sauvegarde'),
               const Text(

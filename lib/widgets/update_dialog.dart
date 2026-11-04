@@ -41,7 +41,11 @@ class UpdateUi {
     final result = await UpdateService.check();
     if (!context.mounted) return;
     Navigator.of(context, rootNavigator: true).pop();
-    if (result.error != null) {
+    if (result.privateRepo) {
+      // Dépôt privé : on ouvre directement la dernière version sur GitHub
+      // (il suffit d'être connecté à son compte GitHub dans le navigateur).
+      await _openLatestPage(context, result.currentVersion);
+    } else if (result.error != null) {
       showMessage(context, result.error!, error: true);
     } else if (!result.hasUpdate) {
       showMessage(context,
@@ -99,6 +103,39 @@ class UpdateUi {
         ],
       ),
     );
+  }
+
+  static Future<void> _openLatestPage(
+      BuildContext context, String current) async {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.system_update, size: 36),
+        title: const Text('Mettre à jour'),
+        content: Text(
+          'Version installée : $current\n\n'
+          'La dernière version va s’ouvrir sur GitHub. '
+          '${Platform.isIOS ? 'Téléchargez le fichier .ipa et installez-le avec Sideloadly.' : 'Touchez le fichier .apk, puis « Mettre à jour ».'} '
+          'Vos factures sont conservées.',
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Annuler')),
+          FilledButton.icon(
+            icon: const Icon(Icons.open_in_new),
+            label: const Text('Ouvrir'),
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
+        ],
+      ),
+    );
+    if (go != true) return;
+    final ok = await _open(UpdateService.releasesPage);
+    if (!ok && context.mounted) {
+      showMessage(context, 'Impossible d’ouvrir ${UpdateService.releasesPage}',
+          error: true);
+    }
   }
 
   static Future<bool> _open(String url) async {
