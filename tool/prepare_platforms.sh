@@ -19,6 +19,14 @@ fi
 # ---------- Android ----------
 MANIFEST=android/app/src/main/AndroidManifest.xml
 sed -i.bak "s/android:label=\"[^\"]*\"/android:label=\"$NAME\"/" "$MANIFEST"
+# Internet (vérification des mises à jour) aussi en version finale.
+if ! grep -q 'android.permission.INTERNET' "$MANIFEST"; then
+  sed -i.bak 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <application#' "$MANIFEST"
+fi
+# Ouvrir les liens https (téléchargement des mises à jour).
+if ! grep -q 'android:scheme="https"' "$MANIFEST"; then
+  sed -i.bak 's#</manifest>#    <queries>\n        <intent>\n            <action android:name="android.intent.action.VIEW" />\n            <data android:scheme="https" />\n        </intent>\n    </queries>\n</manifest>#' "$MANIFEST"
+fi
 rm -f "$MANIFEST.bak"
 
 # ---------- iOS ----------

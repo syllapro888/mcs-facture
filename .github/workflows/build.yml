@@ -32,6 +32,9 @@ jobs:
       - name: Dépendances
         run: flutter pub get
 
+      - name: Icône de l'application
+        run: dart run flutter_launcher_icons
+
       - name: Analyse du code
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
@@ -50,7 +53,7 @@ jobs:
           base64 -d .ci/signing-key.b64 > ~/.android/debug.keystore
 
       - name: Construire l'APK
-        run: flutter build apk --release
+        run: flutter build apk --release --build-name=1.0.${{ github.run_number }} --build-number=${{ github.run_number }}
 
       - name: Renommer
         run: |
@@ -82,9 +85,12 @@ jobs:
       - name: Dépendances
         run: flutter pub get
 
+      - name: Icône de l'application
+        run: dart run flutter_launcher_icons
+
       - name: Construire pour iPhone (sans signature)
         run: |
-          flutter build ios --release --no-codesign --config-only
+          flutter build ios --release --no-codesign --config-only --build-name=1.0.${{ github.run_number }} --build-number=${{ github.run_number }}
           xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner \
             -configuration Release -sdk iphoneos \
             -destination 'generic/platform=iOS' \

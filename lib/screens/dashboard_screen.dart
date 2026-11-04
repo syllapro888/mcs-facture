@@ -7,6 +7,7 @@ import '../providers/invoice_provider.dart';
 import '../providers/settings_provider.dart';
 import '../utils/currency_formatter.dart';
 import '../widgets/product_image_picker.dart';
+import '../widgets/update_dialog.dart';
 import 'client_list_screen.dart';
 import 'invoice_form_screen.dart';
 import 'invoice_list_screen.dart';
@@ -14,8 +15,22 @@ import 'product_list_screen.dart';
 import 'settings_screen.dart';
 import 'stats_screen.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Vérifie les mises à jour quelques secondes après l'ouverture.
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) UpdateUi.checkSilently(context);
+    });
+  }
 
   void _go(BuildContext context, Widget screen) =>
       Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
@@ -58,16 +73,17 @@ class DashboardScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(children: [
-                    if (company.logoPath != null) ...[
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(10)),
-                        child: LocalPhoto(company.logoPath, size: 44),
-                      ),
-                      const SizedBox(width: 12),
-                    ],
+                    Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12)),
+                      child: company.logoPath != null
+                          ? LocalPhoto(company.logoPath, size: 48)
+                          : Image.asset('assets/logo/logo.png',
+                              width: 48, height: 48),
+                    ),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,

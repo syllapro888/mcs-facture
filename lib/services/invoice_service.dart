@@ -119,13 +119,30 @@ class InvoiceService {
     return save(copy);
   }
 
+  static const defaultLogo = 'asset:assets/logo/logo.png';
+
+  /// Lit une photo enregistrée, ou une image intégrée à l'application.
+  static Future<Uint8List?> loadImage(String? path) async {
+    if (path != null && path.startsWith('asset:')) {
+      try {
+        return (await rootBundle.load(path.substring(6))).buffer.asUint8List();
+      } catch (_) {
+        return null;
+      }
+    }
+    return AppPaths.readPhoto(path);
+  }
+
+  /// Sans logo importé, le logo MCS VISION intégré est utilisé.
   Future<Uint8List> pdf(Invoice inv, CompanySettings settings,
           {bool duplicata = false}) async =>
       PdfService.build(
         invoice: inv,
-        settings: settings,
+        settings: settings.logoPath == null
+            ? settings.copyWith(logoPath: defaultLogo)
+            : settings,
         fonts: await fonts(),
-        loadImage: AppPaths.readPhoto,
+        loadImage: loadImage,
         duplicata: duplicata,
       );
 

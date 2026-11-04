@@ -9,10 +9,12 @@ import '../providers/invoice_provider.dart';
 import '../providers/product_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/backup_service.dart';
+import '../services/update_service.dart';
 import '../utils/currency_formatter.dart';
 import '../utils/sample_invoice.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/product_image_picker.dart';
+import '../widgets/update_dialog.dart';
 import 'invoice_preview_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -206,7 +208,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _title('Logo'),
               ProductImagePicker(
                 photoPath: _s.logoPath,
-                label: 'Logo de l’entreprise (galerie ou fichiers)',
+                label: _s.logoPath == null
+                    ? 'Logo MCS VISION par défaut (changer : galerie ou fichiers)'
+                    : 'Logo de l’entreprise (galerie ou fichiers)',
                 onChanged: (p) => setState(() => _s = p == null
                     ? _s.copyWith(clearLogo: true)
                     : _s.copyWith(logoPath: p)),
@@ -285,6 +289,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onPressed: _sample,
                 icon: const Icon(Icons.picture_as_pdf_outlined),
                 label: const Text('Voir une facture d’exemple'),
+              ),
+              _title('Mises à jour'),
+              FutureBuilder<String>(
+                future: UpdateService.currentVersion(),
+                builder: (_, snap) => Text(
+                  'Version installée : ${snap.data ?? '…'}',
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () => UpdateUi.checkManually(context),
+                icon: const Icon(Icons.system_update),
+                label: const Text('Vérifier les mises à jour'),
               ),
               _title('Sauvegarde'),
               const Text(
