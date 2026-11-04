@@ -1,0 +1,193 @@
+name: Construire l'application (Android + iPhone)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    name: Android (APK) + tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Préparer android/ et ios/
+        run: bash tool/prepare_platforms.sh
+
+      - name: Dépendances
+        run: flutter pub get
+
+      - name: Icône de l'application
+        run: dart run flutter_launcher_icons
+
+      - name: Analyse du code
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Tests (calculs + PDF)
+        run: flutter test
+
+      - name: PDF d'exemple
+        uses: actions/upload-artifact@v4
+        with:
+          name: PDF-exemples
+          path: build/test_pdf/*.pdf
+
+      - name: Clé de signature (toujours la même, pour mettre à jour l'app)
+        env:
+          KEY_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          mkdir -p ~/.android
+          if [ -n "$KEY_B64" ]; then
+            printf '%s' "$KEY_B64" | tr -d ' \r\n' | base64 -d > ~/.android/debug.keystore
+          elif [ -f .ci/signing-key.b64 ]; then
+            base64 -d .ci/signing-key.b64 > ~/.android/debug.keystore
+          else
+            echo "::error::Le secret ANDROID_KEYSTORE_B64 est manquant (Settings > Secrets > Actions)."
+            exit 1
+          fi
+
+      - name: Construire l'APK
+        run: flutter build apk --release --build-name=1.0.${{ github.run_number }} --build-number=${{ github.run_number }}
+
+      - name: Renommer
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk MCS-Factures-v1.0.${{ github.run_number }}.apk
+          cp build/test_pdf/exemple_facture.pdf Exemple-facture.pdf
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: |
+            MCS-Factures-v1.0.${{ github.run_number }}.apk
+            Exemple-facture.pdf
+
+  ios:
+    name: iPhone (IPA non signée)
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Préparer android/ et ios/
+        run: bash tool/prepare_platforms.sh
+
+      - name: Dépendances
+        run: flutter pub get
+
+      - name: Icône de l'application
+        run: dart run flutter_launcher_icons
+
+      - name: Construire pour iPhone (sans signature)
+        run: |
+          flutter build ios --release --no-codesign --config-only --build-name=1.0.${{ github.run_number }} --build-number=${{ github.run_number }}
+          xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner \
+            -configuration Release -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/ios_dd \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" \
+            build | tail -n 40
+          test -d build/ios_dd/Build/Products/Release-iphoneos/Runner.app
+
+      - name: Créer le fichier .ipa
+        run: |
+          mkdir -p Payload
+          cp -R build/ios_dd/Build/Products/Release-iphoneos/Runner.app Payload/
+          zip -qr MCS-Factures-v1.0.${{ github.run_number }}.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios
+          path: MCS-Factures-v1.0.${{ github.run_number }}.ipa
+
+  web:
+    name: Version web (iPhone)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Préparer android/, ios/ et web/
+        run: bash tool/prepare_platforms.sh
+
+      - name: Dépendances
+        run: flutter pub get
+
+      - name: Base de données pour le navigateur
+        run: dart run sqflite_common_ffi_web:setup
+
+      - name: Icône de l'application
+        run: dart run flutter_launcher_icons
+
+      - name: Construire le site
+        run: flutter build web --release --base-href /mcs-facture/ --build-name=1.0.${{ github.run_number }} --build-number=${{ github.run_number }}
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  web-deploy:
+    name: Mettre le site en ligne
+    needs: web
+    runs-on: ubuntu-latest
+    # Échoue sans conséquence tant que GitHub Pages n'est pas activé.
+    continue-on-error: true
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
+
+  release:
+    name: Publier dans « Releases »
+    needs: [android, ios]
+    # L'APK est publié même si la version iPhone échoue.
+    if: ${{ always() && needs.android.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: MCS Factures v1.0.${{ github.run_number }}
+          body: |
+            • Android : téléchargez le fichier .apk depuis votre téléphone et installez-le.
+            • iPhone : le fichier .ipa doit être installé avec Sideloadly ou AltStore (voir le README).
+            • Exemple-facture.pdf : aperçu du modèle de facture généré par l'application.
+          files: |
+            out/*.apk
+            out/*.ipa
+            out/*.pdf
