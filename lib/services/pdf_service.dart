@@ -128,9 +128,9 @@ class PdfService {
         footer: (ctx) => _footer(ctx, settings, s),
         build: (ctx) => [
           _header(invoice, settings, s, logo),
-          pw.SizedBox(height: 10),
+          pw.SizedBox(height: 8),
           _stripe(s),
-          pw.SizedBox(height: 12),
+          pw.SizedBox(height: 10),
           if (invoice.supplies.isNotEmpty) ...[
             _sectionTitle('FOURNITURES', s),
             pw.SizedBox(height: 4),
@@ -142,16 +142,16 @@ class PdfService {
               child: pw.Text('Aucun article.', style: s.small),
             ),
           if (invoice.labor.isNotEmpty) ...[
-            pw.SizedBox(height: 12),
+            pw.SizedBox(height: 8),
             _sectionTitle('MAIN-D’ŒUVRE', s),
             pw.SizedBox(height: 4),
             _laborTable(invoice.items, s),
           ],
-          pw.SizedBox(height: 14),
+          pw.SizedBox(height: 10),
           _summary(invoice, totals, settings, s),
-          pw.SizedBox(height: 16),
+          pw.SizedBox(height: 10),
           _guarantees(settings, s),
-          pw.SizedBox(height: 14),
+          pw.SizedBox(height: 8),
           _signatures(invoice, settings, s),
         ],
       ),
@@ -216,7 +216,7 @@ class PdfService {
         pw.SizedBox(width: 10),
         // Centre : coordonnées
         pw.Expanded(
-          flex: 3,
+          flex: 4,
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
@@ -300,7 +300,7 @@ class PdfService {
                     fontWeight: pw.FontWeight.bold,
                     color: s.light,
                     letterSpacing: 1)),
-            pw.Text(value, style: pw.TextStyle(fontSize: 7.8, color: s.dark)),
+            pw.Text(value, style: pw.TextStyle(fontSize: 7.2, color: s.dark)),
           ],
         ),
       );
@@ -378,12 +378,12 @@ class PdfService {
           {pw.Alignment align = pw.Alignment.centerLeft}) =>
       pw.Container(
         alignment: align,
-        padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+        padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 3),
         child: child,
       );
 
   static pw.Widget _photoCell(pw.MemoryImage? img, _Style s) {
-    const size = 42.0;
+    const size = 30.0;
     if (img != null) {
       return pw.Container(
         width: size,
@@ -498,7 +498,7 @@ class PdfService {
       defaultVerticalAlignment: pw.TableCellVerticalAlignment.middle,
       columnWidths: {
         0: pw.FixedColumnWidth(24),
-        1: pw.FixedColumnWidth(54),
+        1: pw.FixedColumnWidth(42),
         2: pw.FlexColumnWidth(),
         3: pw.FixedColumnWidth(56),
         4: pw.FixedColumnWidth(74),
@@ -762,7 +762,7 @@ class PdfService {
                       fontWeight: pw.FontWeight.bold,
                       color: s.dark)),
               pw.Container(
-                height: 46,
+                height: 32,
                 decoration: pw.BoxDecoration(
                   border: pw.Border(
                       bottom: pw.BorderSide(color: s.dark, width: 0.8)),
