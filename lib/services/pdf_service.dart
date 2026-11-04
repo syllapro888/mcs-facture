@@ -150,9 +150,23 @@ class PdfService {
           pw.SizedBox(height: 10),
           _summary(invoice, totals, settings, s),
           pw.SizedBox(height: 10),
-          _guarantees(settings, s),
-          pw.SizedBox(height: 8),
-          _signatures(invoice, settings, s),
+          if (invoice.type == DocumentType.facture)
+            // Facture : signature du responsable à droite des garanties.
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Expanded(child: _guarantees(settings, s)),
+                pw.SizedBox(width: 10),
+                _signatureZone('Signature et cachet du responsable',
+                    _managerLabel(settings), s,
+                    width: 150),
+              ],
+            )
+          else ...[
+            _guarantees(settings, s),
+            pw.SizedBox(height: 8),
+            _signatures(invoice, settings, s),
+          ],
         ],
       ),
     );
@@ -383,7 +397,7 @@ class PdfService {
       );
 
   static pw.Widget _photoCell(pw.MemoryImage? img, _Style s) {
-    const size = 30.0;
+    const size = 28.0;
     if (img != null) {
       return pw.Container(
         width: size,
@@ -749,6 +763,34 @@ class PdfService {
       ],
     );
   }
+
+  static String _managerLabel(CompanySettings c) =>
+      c.managerName.isEmpty ? c.name : '${c.managerName} — ${c.name}';
+
+  static pw.Widget _signatureZone(String title, String name, _Style s,
+          {double width = 210}) =>
+      pw.Container(
+        width: width,
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(title,
+                style: pw.TextStyle(
+                    fontSize: 7.5,
+                    fontWeight: pw.FontWeight.bold,
+                    color: s.dark)),
+            pw.Container(
+              height: 30,
+              decoration: pw.BoxDecoration(
+                border:
+                    pw.Border(bottom: pw.BorderSide(color: s.dark, width: 0.8)),
+              ),
+            ),
+            pw.SizedBox(height: 2),
+            pw.Text(name, style: pw.TextStyle(fontSize: 7, color: s.text)),
+          ],
+        ),
+      );
 
   static pw.Widget _signatures(Invoice inv, CompanySettings c, _Style s) {
     pw.Widget zone(String title, String name) => pw.Container(
