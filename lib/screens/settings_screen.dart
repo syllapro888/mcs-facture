@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -290,6 +291,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: const Icon(Icons.picture_as_pdf_outlined),
                 label: const Text('Voir une facture d’exemple'),
               ),
+              if (!kIsWeb) ...[
               _title('Mises à jour'),
               FutureBuilder<String>(
                 future: UpdateService.currentVersion(),
@@ -304,6 +306,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: const Icon(Icons.system_update),
                 label: const Text('Mettre à jour l’application'),
               ),
+              ],
               _title('Sauvegarde'),
               const Text(
                 'Les données restent sur ce téléphone. Faites une sauvegarde '

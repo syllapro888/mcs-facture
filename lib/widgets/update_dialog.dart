@@ -1,5 +1,4 @@
-import 'dart:io';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -15,7 +14,7 @@ class UpdateUi {
 
   /// Au démarrage : n'affiche quelque chose que s'il y a une nouvelle version.
   static Future<void> checkSilently(BuildContext context) async {
-    if (_checkedThisLaunch) return;
+    if (_checkedThisLaunch || kIsWeb) return;
     _checkedThisLaunch = true;
     final result = await UpdateService.check();
     if (!context.mounted || !result.hasUpdate) return;
@@ -58,7 +57,7 @@ class UpdateUi {
   static Future<void> showUpdate(
       BuildContext context, UpdateCheckResult result) async {
     final u = result.update!;
-    final isIos = Platform.isIOS;
+    final isIos = defaultTargetPlatform == TargetPlatform.iOS;
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -115,7 +114,7 @@ class UpdateUi {
         content: Text(
           'Version installée : $current\n\n'
           'La dernière version va s’ouvrir sur GitHub. '
-          '${Platform.isIOS ? 'Téléchargez le fichier .ipa et installez-le avec Sideloadly.' : 'Touchez le fichier .apk, puis « Mettre à jour ».'} '
+          '${defaultTargetPlatform == TargetPlatform.iOS ? 'Téléchargez le fichier .ipa et installez-le avec Sideloadly.' : 'Touchez le fichier .apk, puis « Mettre à jour ».'} '
           'Vos factures sont conservées.',
         ),
         actions: [

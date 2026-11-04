@@ -111,6 +111,53 @@ jobs:
           name: ios
           path: MCS-Factures-v1.0.${{ github.run_number }}.ipa
 
+  web:
+    name: Version web (iPhone)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Préparer android/, ios/ et web/
+        run: bash tool/prepare_platforms.sh
+
+      - name: Dépendances
+        run: flutter pub get
+
+      - name: Base de données pour le navigateur
+        run: dart run sqflite_common_ffi_web:setup
+
+      - name: Icône de l'application
+        run: dart run flutter_launcher_icons
+
+      - name: Construire le site
+        run: flutter build web --release --base-href /mcs-facture/ --build-name=1.0.${{ github.run_number }} --build-number=${{ github.run_number }}
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  web-deploy:
+    name: Mettre le site en ligne
+    needs: web
+    runs-on: ubuntu-latest
+    # Échoue sans conséquence tant que GitHub Pages n'est pas activé.
+    continue-on-error: true
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
+
   release:
     name: Publier dans « Releases »
     needs: [android, ios]

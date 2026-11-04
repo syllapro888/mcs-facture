@@ -27,15 +27,24 @@ class LocalPhoto extends StatelessWidget {
           child: Icon(icon, color: const Color(0xFF6B8BB5), size: size * 0.5),
         );
     if (rel == null || rel.isEmpty) return placeholder();
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: Image.file(
-        AppPaths.resolve(rel),
-        width: size,
-        height: size,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => placeholder(),
-      ),
+    return FutureBuilder(
+      future: AppPaths.readPhoto(rel),
+      initialData: AppPaths.cached(rel),
+      builder: (_, snap) {
+        final bytes = snap.data;
+        if (bytes == null) return placeholder();
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.memory(
+            bytes,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+            errorBuilder: (_, __, ___) => placeholder(),
+          ),
+        );
+      },
     );
   }
 }

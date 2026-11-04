@@ -1,5 +1,9 @@
+import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 
 import '../models/client.dart';
 import '../models/company_settings.dart';
@@ -13,20 +17,28 @@ class AppDatabase {
   AppDatabase._();
   static final AppDatabase instance = AppDatabase._();
 
-  static const _version = 1;
+  static const _version = 2;
   Database? _db;
 
   Future<Database> get db async {
     final existing = _db;
     if (existing != null) return existing;
-    final path = p.join(await getDatabasesPath(), 'mcs_facture.db');
+    String path;
+    if (kIsWeb) {
+      // Navigateur : base SQLite conservée dans le stockage de Safari/Chrome.
+      databaseFactory = databaseFactoryFfiWebNoWebWorker;
+      path = 'mcs_facture.db';
+    } else {
+      path = p.join(await getDatabasesPath(), 'mcs_facture.db');
+    }
     final opened = await openDatabase(
       path,
       version: _version,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, v) => _create(db),
       onUpgrade: (db, oldV, newV) async {
-        // Futures migrations : ALTER TABLE ... ADD COLUMN, jamais DROP.
+        // Migrations : on ajoute, on ne supprime jamais.
+        if (oldV < 2) await _createFiles(db);
       },
     );
     _db = opened;
@@ -99,6 +111,38 @@ class AppDatabase {
       )''');
     await db.execute(
         'CREATE INDEX idx_items_invoice ON invoice_items(invoice_id)');
+    await _createFiles(db);
+  }
+
+  /// Photos de la version web (sur téléphone, ce sont des fichiers).
+  static Future<void> _createFiles(Database db) => db.execute('''
+      CREATE TABLE IF NOT EXISTS files (
+        path TEXT PRIMARY KEY,
+        data BLOB NOT NULL
+      )''');
+
+  Future<void> writeFile(String path, Uint8List bytes) async {
+    await (await db).insert('files', {'path': path, 'data': bytes},
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<Uint8List?> readFile(String path) async {
+    final rows = await (await db)
+        .query('files', where: 'path = ?', whereArgs: [path], limit: 1);
+    if (rows.isEmpty) return null;
+    final data = rows.first['data'];
+    if (data is Uint8List) return data;
+    if (data is List<int>) return Uint8List.fromList(data);
+    return null;
+  }
+
+  Future<Map<String, Uint8List>> allFiles() async {
+    final rows = await (await db).query('files');
+    return {
+      for (final r in rows)
+        if (r['data'] is List<int>)
+          r['path'] as String: Uint8List.fromList(r['data'] as List<int>)
+    };
   }
 
   // ---------- Paramètres ----------

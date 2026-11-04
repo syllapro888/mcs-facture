@@ -1,32 +1,21 @@
-import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+import 'photo_store_io.dart' if (dart.library.js_interop) 'photo_store_web.dart'
+    as store;
 
-/// Les photos sont enregistrées dans le dossier privé de l'application,
-/// avec un chemin RELATIF (ex. "photos/169999.jpg"). Sur iPhone le dossier
-/// change à chaque mise à jour : un chemin relatif reste toujours valable.
+/// Photos des produits et logo.
+///
+/// Chaque photo est désignée par un chemin RELATIF (ex. "photos/169999.jpg").
+/// Sur téléphone, c'est un fichier dans le dossier privé de l'application
+/// (sur iPhone ce dossier change à chaque mise à jour : un chemin relatif reste
+/// valable). Dans le navigateur, la photo est rangée dans la base de données.
 class AppPaths {
   AppPaths._();
 
-  static String? _docs;
-
-  static Future<void> init() async {
-    _docs = (await getApplicationDocumentsDirectory()).path;
-    await Directory(p.join(_docs!, 'photos')).create(recursive: true);
-  }
-
-  static String get documents {
-    final d = _docs;
-    if (d == null) throw StateError('AppPaths.init() non appelé');
-    return d;
-  }
-
-  static File resolve(String relativePath) =>
-      File(p.join(documents, relativePath));
-
+  static final Map<String, Uint8List> _cache = {};
   static int _counter = 0;
+
+  static Future<void> init() => store.init();
 
   /// Enregistre une image et renvoie son chemin relatif.
   static Future<String> savePhoto(Uint8List bytes, String extension) async {
@@ -34,19 +23,34 @@ class AppPaths {
     final name =
         '${DateTime.now().microsecondsSinceEpoch}_${_counter++}.${ext.isEmpty ? 'jpg' : ext}';
     final rel = 'photos/$name';
-    await resolve(rel).writeAsBytes(bytes, flush: true);
+    await store.write(rel, bytes);
+    _cache[rel] = bytes;
     return rel;
+  }
+
+  /// Écrit une photo à un chemin donné (restauration d'une sauvegarde).
+  static Future<void> writePhoto(String rel, Uint8List bytes) async {
+    await store.write(rel, bytes);
+    _cache[rel] = bytes;
   }
 
   /// Lit une photo ; null si absente (le PDF met alors un emplacement neutre).
   static Future<Uint8List?> readPhoto(String? relativePath) async {
     if (relativePath == null || relativePath.isEmpty) return null;
+    final cached = _cache[relativePath];
+    if (cached != null) return cached;
     try {
-      final f = resolve(relativePath);
-      if (!await f.exists()) return null;
-      return await f.readAsBytes();
+      final bytes = await store.read(relativePath);
+      if (bytes != null) _cache[relativePath] = bytes;
+      return bytes;
     } catch (_) {
       return null;
     }
   }
+
+  /// Photo déjà chargée (affichage immédiat, sans clignotement).
+  static Uint8List? cached(String? rel) => rel == null ? null : _cache[rel];
+
+  /// Toutes les photos (pour la sauvegarde).
+  static Future<Map<String, Uint8List>> allPhotos() => store.all();
 }

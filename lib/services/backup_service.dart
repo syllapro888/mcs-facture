@@ -1,9 +1,7 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:path/path.dart' as p;
 
 import '../database/app_database.dart';
 import '../utils/app_paths.dart';
@@ -18,16 +16,10 @@ class BackupService {
 
   Future<Uint8List> buildBackup() async {
     final tables = await db.dumpAll();
-    final files = <String, String>{};
-    final photosDir = Directory(p.join(AppPaths.documents, 'photos'));
-    if (await photosDir.exists()) {
-      await for (final entity in photosDir.list()) {
-        if (entity is File) {
-          final rel = 'photos/${p.basename(entity.path)}';
-          files[rel] = base64Encode(await entity.readAsBytes());
-        }
-      }
-    }
+    final files = <String, String>{
+      for (final e in (await AppPaths.allPhotos()).entries)
+        e.key: base64Encode(e.value)
+    };
     final json = jsonEncode({
       'format': _format,
       'version': 1,
@@ -94,8 +86,7 @@ class BackupService {
     for (final entry in files.entries) {
       final rel = entry.key as String;
       if (!rel.startsWith('photos/') || rel.contains('..')) continue;
-      await AppPaths.resolve(rel)
-          .writeAsBytes(base64Decode(entry.value as String), flush: true);
+      await AppPaths.writePhoto(rel, base64Decode(entry.value as String));
     }
     // 2. Base de données (transaction).
     await db.restoreAll(tables);

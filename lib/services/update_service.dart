@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 
 /// Nouvelle version publiée sur GitHub (page « Releases »).
@@ -72,15 +73,14 @@ class UpdateService {
 
   static Future<UpdateCheckResult> check() async {
     final current = await currentVersion();
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
+    // La version web se met à jour toute seule.
+    if (kIsWeb) return UpdateCheckResult(current);
     try {
-      final req = await client.getUrl(Uri.parse(
-          'https://api.github.com/repos/$owner/$repo/releases/latest'));
-      req.headers
-        ..set(HttpHeaders.acceptHeader, 'application/vnd.github+json')
-        ..set(HttpHeaders.userAgentHeader, 'mcs-facture-app');
-      final res = await req.close().timeout(const Duration(seconds: 15));
-      final body = await res.transform(utf8.decoder).join();
+      final res = await http.get(
+        Uri.parse('https://api.github.com/repos/$owner/$repo/releases/latest'),
+        headers: {'Accept': 'application/vnd.github+json'},
+      ).timeout(const Duration(seconds: 15));
+      final body = utf8.decode(res.bodyBytes);
       if (res.statusCode == 404) {
         return UpdateCheckResult(current,
             privateRepo: true,
@@ -115,17 +115,13 @@ class UpdateService {
           ipaUrl: asset('.ipa'),
         ),
       );
-    } on SocketException {
-      return UpdateCheckResult(current,
-          error: 'Pas de connexion Internet. Réessayez quand vous serez connecté.');
     } on TimeoutException {
       return UpdateCheckResult(current,
           error: 'La connexion est trop lente. Réessayez plus tard.');
     } catch (e) {
       return UpdateCheckResult(current,
-          error: 'Vérification impossible : $e');
-    } finally {
-      client.close(force: true);
+          error: 'Pas de connexion Internet ou serveur injoignable. '
+              'Réessayez plus tard.');
     }
   }
 }

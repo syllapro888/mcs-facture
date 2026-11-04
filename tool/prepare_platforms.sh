@@ -7,8 +7,8 @@ cd "$(dirname "$0")/.."
 
 NAME="MCS Factures"
 
-if [ ! -d android ] || [ ! -d ios ]; then
-  flutter create --org com.mcsvision --project-name mcs_facture --platforms=android,ios .
+if [ ! -d android ] || [ ! -d ios ] || [ ! -d web ]; then
+  flutter create --org com.mcsvision --project-name mcs_facture --platforms=android,ios,web .
 fi
 
 # Le test d'exemple généré par Flutter ne correspond pas à cette app.
@@ -49,4 +49,29 @@ if [ -f "$PLIST" ]; then
   fi
 fi
 
-echo "android/ et ios/ prêts."
+# ---------- Web (iPhone via Safari) ----------
+if [ -f web/index.html ]; then
+  python3 - <<'PY'
+import json, re
+m = json.load(open('web/manifest.json'))
+m.update({
+    'name': 'MCS Factures',
+    'short_name': 'MCS Factures',
+    'description': 'Factures et devis MCS VISION',
+    'background_color': '#FFFFFF',
+    'theme_color': '#0B2A5B',
+    'display': 'standalone',
+    'orientation': 'portrait',
+})
+json.dump(m, open('web/manifest.json', 'w'), ensure_ascii=False, indent=2)
+h = open('web/index.html', encoding='utf-8').read()
+h = re.sub(r'<title>.*?</title>', '<title>MCS Factures</title>', h, flags=re.S)
+h = re.sub(r'(name="apple-mobile-web-app-title" content=")[^"]*', r'\1MCS Factures', h)
+h = re.sub(r'(name="description" content=")[^"]*', r'\1Factures et devis MCS VISION', h)
+if 'theme-color' not in h:
+    h = h.replace('</head>', '  <meta name="theme-color" content="#0B2A5B">\n</head>')
+open('web/index.html', 'w', encoding='utf-8').write(h)
+PY
+fi
+
+echo "android/, ios/ et web/ prêts."
