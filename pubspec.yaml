@@ -24,6 +24,7 @@ dependencies:
   url_launcher: any
   http: any
   sqflite_common_ffi_web: any
+  web: any
 
 dev_dependencies:
   flutter_test:

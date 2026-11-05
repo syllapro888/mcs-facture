@@ -145,6 +145,18 @@ class AppDatabase {
     };
   }
 
+  /// Contrôle de la version web : compte les ouvertures (doit augmenter
+  /// d'une ouverture à l'autre si les données sont bien conservées).
+  Future<int> countOpening() async {
+    final d = await db;
+    final rows =
+        await d.query('settings', where: 'key = ?', whereArgs: ['web_opens']);
+    final n = (rows.isEmpty ? 0 : int.tryParse('${rows.first['value']}') ?? 0) + 1;
+    await d.insert('settings', {'key': 'web_opens', 'value': '$n'},
+        conflictAlgorithm: ConflictAlgorithm.replace);
+    return n;
+  }
+
   // ---------- Paramètres ----------
 
   Future<CompanySettings> loadSettings() async {
