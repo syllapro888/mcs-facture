@@ -28,6 +28,18 @@ if ! grep -q 'android:scheme="https"' "$MANIFEST"; then
   sed -i.bak 's#</manifest>#    <queries>\n        <intent>\n            <action android:name="android.intent.action.VIEW" />\n            <data android:scheme="https" />\n        </intent>\n    </queries>\n</manifest>#' "$MANIFEST"
 fi
 rm -f "$MANIFEST.bak"
+# Le lint « vital » d'Android plante sur certains plugins (bug de lint,
+# ex. image_picker_android) : il n'est pas utile pour produire l'APK.
+for GRADLE in android/build.gradle.kts android/build.gradle; do
+  if [ -f "$GRADLE" ] && ! grep -q 'lintVital' "$GRADLE"; then
+    cat >> "$GRADLE" <<'GR'
+
+subprojects {
+    tasks.matching { it.name.startsWith("lintVital") }.configureEach { enabled = false }
+}
+GR
+  fi
+done
 
 # ---------- iOS ----------
 PLIST=ios/Runner/Info.plist
