@@ -90,4 +90,29 @@ class InvoiceItem {
         photoPath: m['photo_path'] as String?,
         productId: m['product_id'] as int?,
       );
+
+  /// Trie les lignes par montant total, du plus élevé au plus bas.
+  /// Les lignes « À préciser » (sans prix) vont à la fin.
+  /// Tri stable : à montant égal, l'ordre d'origine est conservé.
+  static List<InvoiceItem> sortByTotalDesc(Iterable<InvoiceItem> items) {
+    final indexed = items.toList().asMap().entries.toList();
+    indexed.sort((a, b) {
+      final ta = a.value.lineTotal;
+      final tb = b.value.lineTotal;
+      if (ta == null && tb != null) return 1;
+      if (ta != null && tb == null) return -1;
+      if (ta != null && tb != null && ta != tb) return tb.compareTo(ta);
+      return a.key.compareTo(b.key);
+    });
+    return [for (final e in indexed) e.value];
+  }
+
+  /// Vrai si les lignes sont déjà dans l'ordre de [sortByTotalDesc].
+  static bool isSortedByTotalDesc(List<InvoiceItem> items) {
+    final sorted = sortByTotalDesc(items);
+    for (var i = 0; i < items.length; i++) {
+      if (!identical(sorted[i], items[i])) return false;
+    }
+    return true;
+  }
 }

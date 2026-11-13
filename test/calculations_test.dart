@@ -145,4 +145,28 @@ void main() {
       expect(inv.toMap()['total'], isNull);
     });
   });
+
+  group('Tri des articles par prix total', () {
+    const a = InvoiceItem(name: 'A', quantity: 2, unitPrice: 5000); // 10 000
+    const b = InvoiceItem(name: 'B', quantity: 1, unitPrice: 45000); // 45 000
+    const c = InvoiceItem(name: 'C', quantity: 10, unitPrice: 500); // 5 000
+    const d = InvoiceItem(name: 'D', quantity: 1, unitPrice: 10000); // 10 000
+    const mo = InvoiceItem(isLabor: true, name: 'Pose'); // À préciser
+
+    test('du plus cher au moins cher, « À préciser » à la fin', () {
+      final sorted = InvoiceItem.sortByTotalDesc([mo, a, b, c, d]);
+      expect(sorted.map((e) => e.name).toList(), ['B', 'A', 'D', 'C', 'Pose']);
+    });
+
+    test('à montant égal, l’ordre d’origine est gardé', () {
+      final sorted = InvoiceItem.sortByTotalDesc([d, a]);
+      expect(sorted.map((e) => e.name).toList(), ['D', 'A']);
+    });
+
+    test('détection d’une liste déjà triée', () {
+      expect(InvoiceItem.isSortedByTotalDesc([b, a, c, mo]), isTrue);
+      expect(InvoiceItem.isSortedByTotalDesc([a, b]), isFalse);
+      expect(InvoiceItem.isSortedByTotalDesc([]), isTrue);
+    });
+  });
 }

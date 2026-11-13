@@ -6,7 +6,6 @@ import '../app.dart';
 import '../models/client.dart';
 import '../models/invoice.dart';
 import '../models/invoice_item.dart';
-import '../models/product.dart';
 import '../providers/invoice_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/invoice_service.dart';
@@ -50,6 +49,9 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
   List<InvoiceItem> _items = [];
   bool _busy = false;
 
+  /// Tri automatique des articles par prix total (plus cher en haut).
+  bool _sortByTotal = true;
+
   @override
   void initState() {
     super.initState();
@@ -76,6 +78,9 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
       _vatEnabled = inv.vatEnabled;
       _vatRate.text = CurrencyFormatter.quantity(inv.vatRate);
       _items = List.of(inv.items);
+      // Ancien document rangé à la main : on garde son ordre (tri désactivé).
+      _sortByTotal = widget.invoice == null ||
+          InvoiceItem.isSortedByTotalDesc(_items);
     });
   }
 
@@ -152,24 +157,49 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
     });
   }
 
+  /// Remet les lignes dans l'ordre du prix total (plus cher en haut)
+  /// si le tri automatique est activé.
+  void _resort() {
+    if (_sortByTotal) _items = InvoiceItem.sortByTotalDesc(_items);
+  }
+
   Future<void> _addFromCatalog() async {
-    final p = await Navigator.push<Product>(context,
+    final picked = await Navigator.push<List<PickedProduct>>(context,
         MaterialPageRoute(builder: (_) => const ProductListScreen(pickMode: true)));
-    if (p == null || !mounted) return;
-    final item = await InvoiceItemForm.show(
-      context,
-      InvoiceItem(
-        isLabor: p.category == 'Main-d’œuvre',
-        name: p.name,
-        description: p.description,
-        quantity: 1,
-        unit: p.unit,
-        unitPrice: p.price,
-        photoPath: p.photoPath,
-        productId: p.id,
-      ),
-    );
-    if (item != null) setState(() => _items.add(item));
+    if (picked == null || picked.isEmpty || !mounted) return;
+    var added = 0;
+    setState(() {
+      for (final (:product, :quantity) in picked) {
+        final p = product;
+        // Produit déjà présent : on augmente la quantité au lieu de doubler la ligne.
+        final existing = _items.indexWhere((it) =>
+            it.productId != null &&
+            it.productId == p.id &&
+            it.unitPrice == p.price);
+        if (existing >= 0) {
+          final it = _items[existing];
+          _items[existing] = it.copyWith(quantity: it.quantity + quantity);
+        } else {
+          _items.add(InvoiceItem(
+            isLabor: p.category == 'Main-d’œuvre',
+            name: p.name,
+            description: p.description,
+            quantity: quantity,
+            unit: p.unit,
+            unitPrice: p.price,
+            photoPath: p.photoPath,
+            productId: p.id,
+          ));
+          added++;
+        }
+      }
+      _resort();
+    });
+    final merged = picked.length - added;
+    showMessage(
+        context,
+        '$added article${added > 1 ? 's' : ''} ajouté${added > 1 ? 's' : ''}'
+        '${merged > 0 ? ', $merged quantité${merged > 1 ? 's' : ''} augmentée${merged > 1 ? 's' : ''}' : ''}');
   }
 
   Future<void> _addFree({required bool labor}) async {
@@ -181,12 +211,22 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
         unit: labor ? 'forfait' : 'pièce',
       ),
     );
-    if (item != null) setState(() => _items.add(item));
+    if (item != null) {
+      setState(() {
+        _items.add(item);
+        _resort();
+      });
+    }
   }
 
   Future<void> _editItem(int index) async {
     final item = await InvoiceItemForm.show(context, _items[index]);
-    if (item != null) setState(() => _items[index] = item);
+    if (item != null) {
+      setState(() {
+        _items[index] = item;
+        _resort();
+      });
+    }
   }
 
   void _move(int index, int delta) {
@@ -372,6 +412,19 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (_items.length > 1)
+                    SwitchListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      secondary: const Icon(Icons.sort),
+                      title: const Text('Trier par prix total'),
+                      subtitle: const Text('Le plus cher en haut'),
+                      value: _sortByTotal,
+                      onChanged: (v) => setState(() {
+                        _sortByTotal = v;
+                        _resort();
+                      }),
+                    ),
                   if (_items.isEmpty)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 8),
@@ -482,11 +535,14 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
                 setState(() => _items.removeAt(i));
             }
           },
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'edit', child: Text('Modifier')),
-            PopupMenuItem(value: 'up', child: Text('Monter')),
-            PopupMenuItem(value: 'down', child: Text('Descendre')),
-            PopupMenuItem(value: 'delete', child: Text('Supprimer')),
+          itemBuilder: (_) => [
+            const PopupMenuItem(value: 'edit', child: Text('Modifier')),
+            // Monter / Descendre seulement quand le tri automatique est coupé.
+            if (!_sortByTotal) ...const [
+              PopupMenuItem(value: 'up', child: Text('Monter')),
+              PopupMenuItem(value: 'down', child: Text('Descendre')),
+            ],
+            const PopupMenuItem(value: 'delete', child: Text('Supprimer')),
           ],
         ),
       ),
