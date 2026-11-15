@@ -93,14 +93,13 @@ jobs:
       - name: Construire le site (iPhone)
         run: flutter build web --release --build-name=$VERSION --build-number=${{ github.run_number }}
 
-      # L'APK est aussi téléchargeable depuis le site : les clients ne
-      # voient jamais GitHub.
-      - name: Ajouter l'APK au site
+      # Le forfait gratuit de Firebase refuse les fichiers .apk : le lien
+      # https://mcs-vision.web.app/download/MCS-Boutique.apk redirige vers
+      # le fichier publié dans la version « boutique » (voir firebase.json).
+      - name: Nommer l'APK
         run: |
-          mkdir -p build/web/download
-          cp build/app/outputs/flutter-apk/app-release.apk build/web/download/MCS-Boutique.apk
           cp build/app/outputs/flutter-apk/app-release.apk MCS-Boutique-v$VERSION.apk
-          echo "{\"version\":\"$VERSION\",\"apk\":\"/download/MCS-Boutique.apk\"}" > build/web/download/version.json
+          cp build/app/outputs/flutter-apk/app-release.apk MCS-Boutique.apk
 
       - uses: actions/upload-artifact@v4
         with:
@@ -135,3 +134,14 @@ jobs:
           prerelease: true
           body: Application cliente MCS Boutique (Android).
           files: boutique/MCS-Boutique-v${{ env.VERSION }}.apk
+
+      # Lien fixe pour le téléchargement depuis le site.
+      - uses: softprops/action-gh-release@v2
+        if: github.event_name != 'pull_request'
+        with:
+          tag_name: boutique
+          name: MCS Boutique (dernière version)
+          prerelease: true
+          body: Dernière version de MCS Boutique pour Android.
+          files: boutique/MCS-Boutique.apk
+          overwrite_files: true
