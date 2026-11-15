@@ -28,6 +28,12 @@ if ! grep -q 'android:scheme="https"' "$MANIFEST"; then
   sed -i.bak 's#</manifest>#    <queries>\n        <intent>\n            <action android:name="android.intent.action.VIEW" />\n            <data android:scheme="https" />\n        </intent>\n    </queries>\n</manifest>#' "$MANIFEST"
 fi
 rm -f "$MANIFEST.bak"
+# Firebase (boutique en ligne) demande Android 6 (API 23) au minimum.
+for G in android/app/build.gradle.kts android/app/build.gradle; do
+  [ -f "$G" ] || continue
+  sed -i.bak -E 's/minSdk = flutter\.minSdkVersion/minSdk = maxOf(flutter.minSdkVersion, 23)/; s/minSdkVersion flutter\.minSdkVersion/minSdkVersion Math.max(flutter.minSdkVersion, 23)/' "$G"
+  rm -f "$G.bak"
+done
 # Le lint « vital » d'Android plante sur certains plugins (bug de lint,
 # ex. image_picker_android) : il n'est pas utile pour produire l'APK.
 for GRADLE in android/build.gradle.kts android/build.gradle; do
@@ -42,6 +48,13 @@ GR
 done
 
 # ---------- iOS ----------
+# Les bibliothèques Firebase demandent iOS 15 minimum.
+if [ -f ios/Podfile ]; then
+  sed -i.bak -E "s/^#? ?platform :ios, '[0-9.]+'/platform :ios, '15.0'/" ios/Podfile && rm -f ios/Podfile.bak
+fi
+if [ -f ios/Runner.xcodeproj/project.pbxproj ]; then
+  sed -i.bak -E 's/IPHONEOS_DEPLOYMENT_TARGET = [0-9.]+;/IPHONEOS_DEPLOYMENT_TARGET = 15.0;/' ios/Runner.xcodeproj/project.pbxproj && rm -f ios/Runner.xcodeproj/project.pbxproj.bak
+fi
 PLIST=ios/Runner/Info.plist
 if [ -f "$PLIST" ]; then
   if command -v /usr/libexec/PlistBuddy >/dev/null 2>&1; then

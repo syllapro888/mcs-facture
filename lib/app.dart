@@ -9,6 +9,7 @@ import 'providers/invoice_provider.dart';
 import 'providers/product_provider.dart';
 import 'providers/settings_provider.dart';
 import 'screens/dashboard_screen.dart';
+import 'services/shop_cloud.dart';
 
 class AppColors {
   static const dark = Color(0xFF0B2A5B);
@@ -30,6 +31,7 @@ class McsApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ClientProvider(db)..load()),
         ChangeNotifierProvider(create: (_) => InvoiceProvider(db)..load()),
         ChangeNotifierProvider(create: (_) => ChinaOrderProvider(db)..load()),
+        ChangeNotifierProvider.value(value: ShopCloud.instance),
       ],
       child: MaterialApp(
         title: 'MCS VISION Factures',

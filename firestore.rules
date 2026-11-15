@@ -1,0 +1,82 @@
+rules_version = '2';
+
+// Règles de sécurité de la base « mcs-vision »
+// (MCS Boutique pour les clients, MCS Facture pour MCS VISION).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Le propriétaire (MCS VISION) est le premier compte connecté dans
+    // MCS Facture : son identifiant est enregistré dans config/owner.
+    function isOwner() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/config/owner)
+        && get(/databases/$(database)/documents/config/owner).data.uid == request.auth.uid;
+    }
+
+    match /config/owner {
+      allow read: if signedIn();
+      // Une seule fois : impossible à modifier ensuite depuis une application.
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'createdAt']);
+      allow update, delete: if false;
+    }
+
+    // Catalogue et coordonnées : visibles par tous, modifiables par MCS VISION.
+    match /shop/{doc} {
+      allow read: if true;
+      allow write: if isOwner();
+    }
+    match /products/{pid} {
+      allow read: if true;
+      allow write: if isOwner();
+    }
+    match /photos/{pid} {
+      allow read: if true;
+      allow write: if isOwner();
+    }
+
+    // Profil de chaque client.
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isOwner());
+      allow create, update: if signedIn() && request.auth.uid == uid;
+      allow delete: if isOwner();
+    }
+
+    // Commandes : le client voit les siennes, MCS VISION voit tout.
+    match /orders/{oid} {
+      allow read: if signedIn()
+        && (resource.data.uid == request.auth.uid || isOwner());
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'attente';
+      // Le client peut seulement ajouter sa capture ou annuler, tant que
+      // la commande n'est pas confirmée.
+      allow update: if isOwner()
+        || (signedIn()
+          && resource.data.uid == request.auth.uid
+          && resource.data.status == 'attente'
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['proof', 'status', 'updatedAt'])
+          && request.resource.data.status in ['attente', 'annulee']);
+      allow delete: if isOwner();
+    }
+
+    // Discussion : une conversation par client.
+    match /chats/{uid} {
+      allow read, write: if signedIn() && (request.auth.uid == uid || isOwner());
+
+      match /messages/{mid} {
+        allow read: if signedIn() && (request.auth.uid == uid || isOwner());
+        allow create: if signedIn() && (
+          (request.auth.uid == uid && request.resource.data.from == 'client')
+          || (isOwner() && request.resource.data.from == 'owner'));
+        allow update, delete: if isOwner();
+      }
+    }
+  }
+}

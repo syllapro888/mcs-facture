@@ -25,6 +25,10 @@ dependencies:
   http: any
   sqflite_common_ffi_web: any
   web: any
+  firebase_core: any
+  firebase_auth: any
+  cloud_firestore: any
+  image: any
 
 dev_dependencies:
   flutter_test:

@@ -3,8 +3,14 @@ name: Construire l'application (Android + iPhone)
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'boutique/**'
+      - '.github/workflows/boutique.yml'
   # Vérification des modifications proposées (pas de publication).
   pull_request:
+    paths-ignore:
+      - 'boutique/**'
+      - '.github/workflows/boutique.yml'
   workflow_dispatch:
 
 permissions:
@@ -123,6 +129,9 @@ jobs:
 
       - name: Icône de l'application
         run: dart run flutter_launcher_icons
+
+      - name: iOS 15 minimum (Firebase)
+        run: bash tool/prepare_platforms.sh
 
       - name: Construire pour iPhone (sans signature)
         run: |

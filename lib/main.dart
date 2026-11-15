@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'app.dart';
 import 'database/app_database.dart';
+import 'services/shop_cloud.dart';
 import 'utils/app_paths.dart';
 import 'utils/web_storage_io.dart'
     if (dart.library.js_interop) 'utils/web_storage_web.dart';
@@ -20,5 +21,7 @@ Future<void> main() async {
       debugPrint('MCS_DB_ERROR $e');
     }
   }
+  // Boutique en ligne : l'application marche aussi sans Internet.
+  await ShopCloud.init();
   runApp(const McsApp());
 }
