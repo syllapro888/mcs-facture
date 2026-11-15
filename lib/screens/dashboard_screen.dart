@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../app.dart';
 import '../models/invoice.dart';
 import '../providers/invoice_provider.dart';
+import '../providers/product_provider.dart';
+import '../services/shop_cloud.dart';
 import '../providers/settings_provider.dart';
 import '../utils/currency_formatter.dart';
 import '../widgets/product_image_picker.dart';
@@ -15,6 +17,7 @@ import 'invoice_list_screen.dart';
 import 'product_bulk_screen.dart';
 import 'product_list_screen.dart';
 import 'settings_screen.dart';
+import 'shop_screen.dart';
 import 'stats_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -28,6 +31,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    // Envoi automatique des articles publiés vers MCS Boutique.
+    ShopCloud.instance.attach(
+        context.read<ProductProvider>(), context.read<SettingsProvider>());
     // Vérifie les mises à jour quelques secondes après l'ouverture.
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) UpdateUi.checkSilently(context);
@@ -41,6 +47,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     final stats = context.watch<InvoiceProvider>().stats;
     final company = context.watch<SettingsProvider>().settings;
+    final cloud = context.watch<ShopCloud>();
+    final shopBadge = cloud.pendingOrders + cloud.unreadChats;
 
     final actions = <(IconData, String, Widget)>[
       (Icons.receipt_long, 'Nouvelle facture',
@@ -51,6 +59,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const InvoiceListScreen(type: DocumentType.facture)),
       (Icons.folder_copy_outlined, 'Devis',
           const InvoiceListScreen(type: DocumentType.devis)),
+      (Icons.storefront_outlined, 'Boutique en ligne', const ShopScreen()),
       (Icons.inventory_2_outlined, 'Catalogue', const ProductListScreen()),
       (Icons.add_photo_alternate_outlined, 'Ajout rapide',
           const ProductBulkScreen(start: BulkStart.photos)),
@@ -161,6 +170,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       icon: actions[i].$1,
                       label: actions[i].$2,
                       highlight: i < 2,
+                      badge: actions[i].$3 is ShopScreen ? shopBadge : 0,
                       onTap: () => _go(context, actions[i].$3),
                     ),
                 ],
@@ -202,8 +212,10 @@ class _ActionTile extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.highlight = false,
+    this.badge = 0,
   });
 
+  final int badge;
   final IconData icon;
   final String label;
   final VoidCallback onTap;
@@ -224,7 +236,11 @@ class _ActionTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(icon, color: AppColors.dark, size: 30),
+              Badge(
+                isLabelVisible: badge > 0,
+                label: Text('$badge'),
+                child: Icon(icon, color: AppColors.dark, size: 30),
+              ),
               Text(label,
                   style: const TextStyle(
                       color: AppColors.dark,

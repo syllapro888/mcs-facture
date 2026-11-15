@@ -130,6 +130,9 @@ jobs:
       - name: Icône de l'application
         run: dart run flutter_launcher_icons
 
+      - name: iOS 15 minimum (Firebase)
+        run: bash tool/prepare_platforms.sh
+
       - name: Construire pour iPhone (sans signature)
         run: |
           flutter build ios --release --no-codesign --config-only --build-name=1.0.${{ github.run_number }} --build-number=${{ github.run_number }}
