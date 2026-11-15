@@ -3,8 +3,14 @@ name: Construire l'application (Android + iPhone)
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'boutique/**'
+      - '.github/workflows/boutique.yml'
   # Vérification des modifications proposées (pas de publication).
   pull_request:
+    paths-ignore:
+      - 'boutique/**'
+      - '.github/workflows/boutique.yml'
   workflow_dispatch:
 
 permissions:
