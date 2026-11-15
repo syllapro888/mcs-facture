@@ -23,6 +23,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   late String _category;
   late String _unit;
   String? _photo;
+  bool _published = false;
   bool _saving = false;
 
   @override
@@ -36,6 +37,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _category = p?.category ?? ProductCategories.all.last;
     _unit = p?.unit ?? 'pièce';
     _photo = p?.photoPath;
+    _published = p?.published ?? false;
   }
 
   @override
@@ -60,6 +62,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         unit: _unit,
         price: CurrencyFormatter.parseAmount(_price.text) ?? 0,
         photoPath: _photo,
+        published: _published,
         createdAt: base.createdAt,
       );
       await context.read<ProductProvider>().save(p);
@@ -80,7 +83,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     return Scaffold(
       appBar: AppBar(
           title: Text(
-              widget.product == null ? 'Nouveau produit' : 'Modifier le produit')),
+              widget.product?.id == null ? 'Nouveau produit' : 'Modifier le produit')),
       body: Form(
         key: _form,
         child: ListView(
@@ -133,6 +136,20 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                 ),
               ),
             ]),
+            Card(
+              elevation: 0,
+              color: _published ? const Color(0xFFE6F6EC) : Colors.white,
+              child: SwitchListTile(
+                value: _published,
+                onChanged: (v) => setState(() => _published = v),
+                secondary: Icon(Icons.storefront_outlined,
+                    color: _published ? Colors.green.shade700 : null),
+                title: const Text('Publier dans MCS Boutique'),
+                subtitle: Text(_published
+                    ? 'Visible par les clients'
+                    : 'Privé : seulement dans vos factures'),
+              ),
+            ),
             const SizedBox(height: 8),
             FilledButton.icon(
               onPressed: _saving ? null : _save,

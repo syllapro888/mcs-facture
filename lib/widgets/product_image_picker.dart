@@ -108,6 +108,54 @@ class ImagePickerHelper {
   }
 }
 
+/// Ajout rapide : plusieurs photos ou appareil photo direct.
+class QuickPhotos {
+  QuickPhotos._();
+
+  static Future<String> _store(XFile x) async {
+    final bytes = await x.readAsBytes();
+    final ext = x.name.toLowerCase().endsWith('.png') ? 'png' : 'jpg';
+    return AppPaths.savePhoto(bytes, ext);
+  }
+
+  /// Plusieurs photos de la galerie d'un coup. Liste vide si annulé.
+  static Future<List<String>> pickMany(BuildContext context) async {
+    try {
+      final files = await ImagePicker().pickMultiImage(
+          maxWidth: 1400, maxHeight: 1400, imageQuality: 85);
+      final result = <String>[];
+      for (final x in files) {
+        result.add(await _store(x));
+      }
+      return result;
+    } catch (e) {
+      if (context.mounted) {
+        showMessage(context, 'Impossible de charger les photos : $e',
+            error: true);
+      }
+      return const [];
+    }
+  }
+
+  /// Ouvre directement l'appareil photo. null si annulé.
+  static Future<String?> camera(BuildContext context) async {
+    try {
+      final x = await ImagePicker().pickImage(
+          source: ImageSource.camera,
+          maxWidth: 1400,
+          maxHeight: 1400,
+          imageQuality: 85);
+      if (x == null) return null;
+      return await _store(x);
+    } catch (e) {
+      if (context.mounted) {
+        showMessage(context, 'Appareil photo indisponible : $e', error: true);
+      }
+      return null;
+    }
+  }
+}
+
 /// Zone photo cliquable avec boutons Changer / Retirer.
 class ProductImagePicker extends StatelessWidget {
   const ProductImagePicker({
