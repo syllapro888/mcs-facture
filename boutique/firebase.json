@@ -4,21 +4,47 @@
   },
   "hosting": {
     "public": "build/web",
-    "ignore": ["firebase.json", "**/.*"],
+    "ignore": [
+      "firebase.json",
+      "**/.*"
+    ],
     "headers": [
       {
-        "source": "/download/**",
-        "headers": [{ "key": "Content-Disposition", "value": "attachment" }]
-      },
-      {
         "source": "**/*.@(js|wasm|json|png|ttf|otf)",
-        "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600" }]
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=3600"
+          }
+        ]
       },
       {
         "source": "/index.html",
-        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
       }
     ],
-    "rewrites": [{ "source": "**", "destination": "/index.html" }]
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
+    "redirects": [
+      {
+        "source": "/download/MCS-Boutique.apk",
+        "destination": "https://github.com/syllapro888/mcs-facture/releases/download/boutique/MCS-Boutique.apk",
+        "type": 302
+      },
+      {
+        "source": "/android",
+        "destination": "https://github.com/syllapro888/mcs-facture/releases/download/boutique/MCS-Boutique.apk",
+        "type": 302
+      }
+    ]
   }
 }

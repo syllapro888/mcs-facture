@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 
 import '../models.dart';
@@ -178,6 +180,21 @@ class _Header extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style:
                           const TextStyle(color: Colors.white70, fontSize: 12)),
+                  // Sur le site : lien vers l'application Android.
+                  if (kIsWeb && defaultTargetPlatform == TargetPlatform.android)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                            minimumSize: const Size(0, 36),
+                            backgroundColor: AppColors.yellow,
+                            foregroundColor: AppColors.dark),
+                        onPressed: () => launchUrl(
+                            Uri.base.resolve('/download/MCS-Boutique.apk')),
+                        icon: const Icon(Icons.android, size: 18),
+                        label: const Text('Installer l’application'),
+                      ),
+                    ),
                 ],
               ),
             ),
