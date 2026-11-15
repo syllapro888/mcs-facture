@@ -109,8 +109,11 @@ jobs:
             boutique/MCS-Boutique-v${{ env.VERSION }}.apk
             boutique/build/web
 
+      # Les règles Firestore sont publiées à la main dans la console Firebase
+      # (le compte de service n'a pas le droit de les modifier).
       - name: Mettre en ligne sur Firebase Hosting
         if: github.event_name != 'pull_request'
+        continue-on-error: true
         env:
           SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
@@ -120,8 +123,7 @@ jobs:
           fi
           printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
-          cp ../firestore.rules firestore.rules
-          npx --yes firebase-tools@latest deploy --only hosting,firestore:rules --project mcs-vision --non-interactive
+          npx --yes firebase-tools@latest deploy --only hosting --project mcs-vision --non-interactive
 
       # Version de secours dans « Releases » (marquée pré-version pour ne pas
       # gêner les mises à jour de MCS Facture).
