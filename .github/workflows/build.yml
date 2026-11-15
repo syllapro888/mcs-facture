@@ -74,6 +74,21 @@ jobs:
           fi
           exit $status
 
+      # Sécurité : si l'APK n'est pas signé avec la clé MCS VISION, le
+      # téléphone demanderait de désinstaller l'ancienne version (et les
+      # factures seraient perdues). On bloque donc la publication.
+      - name: Vérifier la clé de signature (mise à jour sans désinstaller)
+        run: |
+          EXPECTED=96fffb593c8e7e6c48987edda39e9874f164ad38ce6b7eb0b706c22cd0b4c128
+          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner
+          "$APKSIGNER" verify --print-certs build/app/outputs/flutter-apk/app-release.apk | tee sig.txt
+          GOT=$(grep -m1 "certificate SHA-256 digest" sig.txt | awk '{print $NF}')
+          if [ "$GOT" != "$EXPECTED" ]; then
+            echo "::error title=Signature::APK signé avec une AUTRE clé ($GOT). Les utilisateurs devraient désinstaller l'app. Vérifiez le secret ANDROID_KEYSTORE_B64."
+            exit 1
+          fi
+          echo "Signature MCS VISION OK : la mise à jour s'installera par-dessus."
+
       - name: Renommer
         run: |
           cp build/app/outputs/flutter-apk/app-release.apk MCS-Factures-v1.0.${{ github.run_number }}.apk
