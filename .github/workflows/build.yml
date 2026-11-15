@@ -3,6 +3,8 @@ name: Construire l'application (Android + iPhone)
 on:
   push:
     branches: [main]
+  # Vérification des modifications proposées (pas de publication).
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -190,6 +192,7 @@ jobs:
     runs-on: ubuntu-latest
     # Échoue sans conséquence tant que GitHub Pages n'est pas activé.
     continue-on-error: true
+    if: github.event_name != 'pull_request'
     permissions:
       pages: write
       id-token: write
@@ -204,7 +207,7 @@ jobs:
     name: Publier dans « Releases »
     needs: [android, ios]
     # L'APK est publié même si la version iPhone échoue.
-    if: ${{ always() && needs.android.result == 'success' }}
+    if: ${{ always() && needs.android.result == 'success' && github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

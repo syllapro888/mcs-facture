@@ -8,9 +8,11 @@ import '../providers/settings_provider.dart';
 import '../utils/currency_formatter.dart';
 import '../widgets/product_image_picker.dart';
 import '../widgets/update_dialog.dart';
+import 'china_order_list_screen.dart';
 import 'client_list_screen.dart';
 import 'invoice_form_screen.dart';
 import 'invoice_list_screen.dart';
+import 'product_bulk_screen.dart';
 import 'product_list_screen.dart';
 import 'settings_screen.dart';
 import 'stats_screen.dart';
@@ -50,7 +52,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       (Icons.folder_copy_outlined, 'Devis',
           const InvoiceListScreen(type: DocumentType.devis)),
       (Icons.inventory_2_outlined, 'Catalogue', const ProductListScreen()),
+      (Icons.add_photo_alternate_outlined, 'Ajout rapide',
+          const ProductBulkScreen(start: BulkStart.photos)),
       (Icons.people_alt_outlined, 'Clients', const ClientListScreen()),
+      (Icons.local_shipping_outlined, 'Commandes Chine',
+          const ChinaOrderListScreen()),
       (Icons.bar_chart, 'Statistiques', const StatsScreen()),
       (Icons.settings_outlined, 'Paramètres', const SettingsScreen()),
     ];

@@ -8,6 +8,10 @@ class ProductCategories {
     'Rails et fixations',
     'Coffrets de protection',
     'Caméras CCTV',
+    'Installation caméras',
+    'Ordinateurs',
+    'Accessoires informatiques',
+    'Réseau et Wi-Fi',
     'Main-d’œuvre',
     'Autres fournitures',
   ];
@@ -34,6 +38,7 @@ class Product {
   final String unit;
   final int price; // FCFA
   final String? photoPath; // chemin relatif
+  final bool published; // visible dans MCS Boutique
   final DateTime createdAt;
 
   const Product({
@@ -44,6 +49,7 @@ class Product {
     this.unit = 'pièce',
     this.price = 0,
     this.photoPath,
+    this.published = false,
     required this.createdAt,
   });
 
@@ -56,6 +62,8 @@ class Product {
     int? price,
     String? photoPath,
     bool clearPhoto = false,
+    bool? published,
+    DateTime? createdAt,
   }) =>
       Product(
         id: id ?? this.id,
@@ -65,7 +73,8 @@ class Product {
         unit: unit ?? this.unit,
         price: price ?? this.price,
         photoPath: clearPhoto ? null : (photoPath ?? this.photoPath),
-        createdAt: createdAt,
+        published: published ?? this.published,
+        createdAt: createdAt ?? this.createdAt,
       );
 
   Map<String, Object?> toMap() => {
@@ -76,6 +85,7 @@ class Product {
         'unit': unit,
         'price': price,
         'photo_path': photoPath,
+        'published': published ? 1 : 0,
         'created_at': createdAt.toIso8601String(),
       };
 
@@ -87,6 +97,7 @@ class Product {
         unit: (m['unit'] as String?) ?? 'pièce',
         price: (m['price'] as num?)?.toInt() ?? 0,
         photoPath: m['photo_path'] as String?,
+        published: ((m['published'] as num?) ?? 0) != 0,
         createdAt: DateTime.tryParse((m['created_at'] as String?) ?? '') ??
             DateTime.now(),
       );

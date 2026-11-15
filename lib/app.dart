@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 
 import 'database/app_database.dart';
+import 'providers/china_order_provider.dart';
 import 'providers/client_provider.dart';
 import 'providers/invoice_provider.dart';
 import 'providers/product_provider.dart';
@@ -28,6 +29,7 @@ class McsApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ProductProvider(db)..load()),
         ChangeNotifierProvider(create: (_) => ClientProvider(db)..load()),
         ChangeNotifierProvider(create: (_) => InvoiceProvider(db)..load()),
+        ChangeNotifierProvider(create: (_) => ChinaOrderProvider(db)..load()),
       ],
       child: MaterialApp(
         title: 'MCS VISION Factures',

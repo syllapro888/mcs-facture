@@ -38,6 +38,22 @@ class ProductProvider extends ChangeNotifier {
     await load();
   }
 
+  /// Ajout rapide : plusieurs produits enregistrés en une fois.
+  Future<void> saveAll(List<Product> list) async {
+    if (list.isEmpty) return;
+    await db.insertProducts(list);
+    await load();
+  }
+
+  /// Publie ou retire de MCS Boutique.
+  Future<void> setPublished(Iterable<Product> list, bool published) async {
+    await db.setPublished(
+        [for (final p in list) if (p.id != null) p.id!], published);
+    await load();
+  }
+
+  int get publishedCount => _products.where((p) => p.published).length;
+
   Future<void> delete(Product p) async {
     if (p.id == null) return;
     await db.deleteProduct(p.id!);

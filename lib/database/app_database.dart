@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 
+import '../models/china_order.dart';
 import '../models/client.dart';
 import '../models/company_settings.dart';
 import '../models/invoice.dart';
@@ -17,7 +18,7 @@ class AppDatabase {
   AppDatabase._();
   static final AppDatabase instance = AppDatabase._();
 
-  static const _version = 2;
+  static const _version = 3;
   Database? _db;
 
   Future<Database> get db async {
@@ -39,6 +40,11 @@ class AppDatabase {
       onUpgrade: (db, oldV, newV) async {
         // Migrations : on ajoute, on ne supprime jamais.
         if (oldV < 2) await _createFiles(db);
+        if (oldV < 3) {
+          await db.execute(
+              'ALTER TABLE products ADD COLUMN published INTEGER NOT NULL DEFAULT 0');
+          await _createChinaOrders(db);
+        }
       },
     );
     _db = opened;
@@ -60,6 +66,7 @@ class AppDatabase {
         unit TEXT,
         price INTEGER NOT NULL DEFAULT 0,
         photo_path TEXT,
+        published INTEGER NOT NULL DEFAULT 0,
         created_at TEXT
       )''');
     await db.execute('''
@@ -112,7 +119,27 @@ class AppDatabase {
     await db.execute(
         'CREATE INDEX idx_items_invoice ON invoice_items(invoice_id)');
     await _createFiles(db);
+    await _createChinaOrders(db);
   }
+
+  /// Commandes passées en Chine (articles et photos rangés en JSON).
+  static Future<void> _createChinaOrders(Database db) => db.execute('''
+      CREATE TABLE IF NOT EXISTS china_orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        reference TEXT,
+        supplier TEXT,
+        date TEXT NOT NULL,
+        status TEXT NOT NULL,
+        rate REAL NOT NULL DEFAULT 0,
+        shipping INTEGER NOT NULL DEFAULT 0,
+        other_fees INTEGER NOT NULL DEFAULT 0,
+        tracking TEXT,
+        notes TEXT,
+        items TEXT,
+        photos TEXT,
+        created_at TEXT,
+        updated_at TEXT
+      )''');
 
   /// Photos de la version web (sur téléphone, ce sont des fichiers).
   static Future<void> _createFiles(Database db) => db.execute('''
@@ -171,6 +198,18 @@ class AppDatabase {
         conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  /// Petite valeur mémorisée (ex. dernier taux yuan → FCFA).
+  Future<String?> getValue(String key) async {
+    final rows = await (await db)
+        .query('settings', where: 'key = ?', whereArgs: [key], limit: 1);
+    return rows.isEmpty ? null : rows.first['value'] as String?;
+  }
+
+  Future<void> setValue(String key, String value) async {
+    await (await db).insert('settings', {'key': key, 'value': value},
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
   // ---------- Produits ----------
 
   Future<List<Product>> products() async {
@@ -189,6 +228,44 @@ class AppDatabase {
 
   Future<void> deleteProduct(int id) async =>
       (await db).delete('products', where: 'id = ?', whereArgs: [id]);
+
+  /// Enregistre plusieurs produits d'un coup (ajout rapide).
+  Future<void> insertProducts(List<Product> list) async {
+    final d = await db;
+    await d.transaction((txn) async {
+      for (final prod in list) {
+        await txn.insert('products', prod.toMap()..remove('id'));
+      }
+    });
+  }
+
+  /// Publie / retire plusieurs produits de MCS Boutique.
+  Future<void> setPublished(List<int> ids, bool published) async {
+    if (ids.isEmpty) return;
+    final d = await db;
+    await d.update('products', {'published': published ? 1 : 0},
+        where: 'id IN (${List.filled(ids.length, '?').join(',')})',
+        whereArgs: ids);
+  }
+
+  // ---------- Commandes Chine ----------
+
+  Future<List<ChinaOrder>> chinaOrders() async {
+    final rows = await (await db)
+        .query('china_orders', orderBy: 'date DESC, id DESC');
+    return rows.map(ChinaOrder.fromMap).toList();
+  }
+
+  Future<int> saveChinaOrder(ChinaOrder o) async {
+    final d = await db;
+    final map = o.toMap()..remove('id');
+    if (o.id == null) return d.insert('china_orders', map);
+    await d.update('china_orders', map, where: 'id = ?', whereArgs: [o.id]);
+    return o.id!;
+  }
+
+  Future<void> deleteChinaOrder(int id) async =>
+      (await db).delete('china_orders', where: 'id = ?', whereArgs: [id]);
 
   // ---------- Clients ----------
 
@@ -296,8 +373,11 @@ class AppDatabase {
     'products',
     'clients',
     'invoices',
-    'invoice_items'
+    'invoice_items',
+    'china_orders',
   ];
+
+  static const _optionalTables = {'china_orders'};
 
   Future<Map<String, List<Map<String, Object?>>>> dumpAll() async {
     final d = await db;
@@ -309,10 +389,16 @@ class AppDatabase {
   Future<void> restoreAll(Map<String, List<Map<String, Object?>>> data) async {
     final d = await db;
     await d.transaction((txn) async {
-      for (final t in backupTables.reversed) {
+      // Une table absente d'une ancienne sauvegarde (ex. commandes Chine)
+      // n'est pas vidée.
+      final present = [
+        for (final t in backupTables)
+          if (data.containsKey(t) || !_optionalTables.contains(t)) t
+      ];
+      for (final t in present.reversed) {
         await txn.delete(t);
       }
-      for (final t in backupTables) {
+      for (final t in present) {
         for (final row in data[t] ?? const <Map<String, Object?>>[]) {
           await txn.insert(t, row);
         }

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../app.dart';
 import '../database/app_database.dart';
 import '../models/company_settings.dart';
+import '../providers/china_order_provider.dart';
 import '../providers/client_provider.dart';
 import '../providers/invoice_provider.dart';
 import '../providers/product_provider.dart';
@@ -133,6 +134,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         context.read<ProductProvider>().load(),
         context.read<ClientProvider>().load(),
         context.read<InvoiceProvider>().load(),
+        context.read<ChinaOrderProvider>().load(),
       ]);
       if (!mounted) return;
       showMessage(context, 'Sauvegarde restaurée');

@@ -6,6 +6,7 @@ import '../providers/product_provider.dart';
 import '../utils/currency_formatter.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/product_image_picker.dart';
+import 'product_bulk_screen.dart';
 import 'product_form_screen.dart';
 
 /// Un produit choisi dans le catalogue, avec sa quantité.
@@ -26,12 +27,92 @@ class _ProductListScreenState extends State<ProductListScreen> {
   String _query = '';
   String? _category;
 
+  /// Filtre « En ligne » : seulement les articles publiés dans la boutique.
+  bool _onlyPublished = false;
+
   /// Sélection en mode choix : id du produit -> quantité.
   final Map<int, double> _picked = {};
 
   Future<void> _edit([Product? p]) async {
     await Navigator.push(context,
         MaterialPageRoute(builder: (_) => ProductFormScreen(product: p)));
+  }
+
+  /// Choix : un produit, ajout rapide, plusieurs photos, mode caméra.
+  Future<void> _addMenu() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined),
+            title: const Text('Plusieurs photos d’un coup'),
+            subtitle: const Text('Chaque photo devient un article'),
+            onTap: () => Navigator.pop(ctx, 'photos'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_camera_outlined),
+            title: const Text('Mode caméra rapide'),
+            subtitle: const Text('Photo, nom, prix… et suivant'),
+            onTap: () => Navigator.pop(ctx, 'camera'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.table_rows_outlined),
+            title: const Text('Saisie rapide (plusieurs lignes)'),
+            subtitle: const Text('Nom et prix à la suite, sans photo'),
+            onTap: () => Navigator.pop(ctx, 'rows'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.add_box_outlined),
+            title: const Text('Un seul produit (fiche complète)'),
+            onTap: () => Navigator.pop(ctx, 'one'),
+          ),
+        ]),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    if (choice == 'one') return _edit();
+    final start = switch (choice) {
+      'photos' => BulkStart.photos,
+      'camera' => BulkStart.camera,
+      _ => BulkStart.empty,
+    };
+    await Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) =>
+                ProductBulkScreen(start: start, category: _category)));
+  }
+
+  /// Copie d'un produit (pour un modèle proche) : on change seulement
+  /// ce qui diffère.
+  Future<void> _duplicate(Product p) async {
+    final copy = Product(
+      name: '${p.name} (copie)',
+      description: p.description,
+      category: p.category,
+      unit: p.unit,
+      price: p.price,
+      photoPath: p.photoPath,
+      published: p.published,
+      createdAt: DateTime.now(),
+    );
+    await Navigator.push(context,
+        MaterialPageRoute(builder: (_) => ProductFormScreen(product: copy)));
+  }
+
+  Future<void> _setPublished(List<Product> list, bool publish) async {
+    if (list.isEmpty) return;
+    await context.read<ProductProvider>().setPublished(list, publish);
+    if (!mounted) return;
+    final n = list.length;
+    final s = n > 1 ? 's' : '';
+    showMessage(
+        context,
+        publish
+            ? '$n article$s publié$s dans MCS Boutique'
+            : '$n article$s retiré$s de MCS Boutique');
   }
 
   Future<void> _delete(Product p) async {
@@ -97,6 +178,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
   Widget build(BuildContext context) {
     final provider = context.watch<ProductProvider>();
     var list = provider.search(_query, category: _category);
+    if (_onlyPublished) list = list.where((p) => p.published).toList();
     if (widget.pickMode) {
       // En mode choix : les plus chers en haut.
       list = List.of(list)..sort((a, b) => b.price.compareTo(a.price));
@@ -121,9 +203,9 @@ class _ProductListScreenState extends State<ProductListScreen> {
       floatingActionButton: widget.pickMode && pickedCount > 0
           ? null
           : FloatingActionButton.extended(
-              onPressed: () => _edit(),
+              onPressed: widget.pickMode ? () => _edit() : _addMenu,
               icon: const Icon(Icons.add),
-              label: const Text('Produit'),
+              label: Text(widget.pickMode ? 'Produit' : 'Ajouter'),
             ),
       bottomNavigationBar: widget.pickMode && pickedCount > 0
           ? SafeArea(
@@ -156,6 +238,17 @@ class _ProductListScreenState extends State<ProductListScreen> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             children: [
+              if (!widget.pickMode)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: FilterChip(
+                    avatar: const Icon(Icons.storefront, size: 18),
+                    label: Text('En ligne (${provider.publishedCount})'),
+                    selected: _onlyPublished,
+                    selectedColor: const Color(0xFFD6F2DF),
+                    onSelected: (v) => setState(() => _onlyPublished = v),
+                  ),
+                ),
               Padding(
                 padding: const EdgeInsets.only(right: 6),
                 child: ChoiceChip(
@@ -176,6 +269,16 @@ class _ProductListScreenState extends State<ProductListScreen> {
             ],
           ),
         ),
+        if (!widget.pickMode && _category != null && list.isNotEmpty)
+          _CategoryPublishBar(
+            category: _category!,
+            total: list.length,
+            published: list.where((p) => p.published).length,
+            onPublish: () =>
+                _setPublished(list.where((p) => !p.published).toList(), true),
+            onUnpublish: () =>
+                _setPublished(list.where((p) => p.published).toList(), false),
+          ),
         if (widget.pickMode && list.isNotEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -220,8 +323,16 @@ class _ProductListScreenState extends State<ProductListScreen> {
                           title: Text(p.name,
                               style:
                                   const TextStyle(fontWeight: FontWeight.w600)),
-                          subtitle: Text(
-                              '${p.category} • ${CurrencyFormatter.fcfa(p.price)} / ${p.unit}'),
+                          subtitle: Text.rich(TextSpan(children: [
+                            if (!widget.pickMode && p.published)
+                              const WidgetSpan(
+                                alignment: PlaceholderAlignment.middle,
+                                child: _OnlineBadge(),
+                              ),
+                            TextSpan(
+                                text:
+                                    '${p.category} • ${CurrencyFormatter.fcfa(p.price)} / ${p.unit}'),
+                          ])),
                           onTap: widget.pickMode
                               ? () => _toggle(p)
                               : () => _edit(p),
@@ -234,12 +345,30 @@ class _ProductListScreenState extends State<ProductListScreen> {
                                     )
                                   : const Icon(Icons.check_box_outline_blank))
                               : PopupMenuButton<String>(
-                                  onSelected: (v) =>
-                                      v == 'edit' ? _edit(p) : _delete(p),
-                                  itemBuilder: (_) => const [
-                                    PopupMenuItem(
+                                  onSelected: (v) {
+                                    switch (v) {
+                                      case 'edit':
+                                        _edit(p);
+                                      case 'copy':
+                                        _duplicate(p);
+                                      case 'publish':
+                                        _setPublished([p], !p.published);
+                                      case 'delete':
+                                        _delete(p);
+                                    }
+                                  },
+                                  itemBuilder: (_) => [
+                                    const PopupMenuItem(
                                         value: 'edit', child: Text('Modifier')),
+                                    const PopupMenuItem(
+                                        value: 'copy',
+                                        child: Text('Dupliquer')),
                                     PopupMenuItem(
+                                        value: 'publish',
+                                        child: Text(p.published
+                                            ? 'Retirer de MCS Boutique'
+                                            : 'Publier dans MCS Boutique')),
+                                    const PopupMenuItem(
                                         value: 'delete',
                                         child: Text('Supprimer')),
                                   ],
@@ -276,5 +405,65 @@ class _QtyStepper extends StatelessWidget {
         onPressed: onPlus,
       ),
     ]);
+  }
+}
+
+class _OnlineBadge extends StatelessWidget {
+  const _OnlineBadge();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        margin: const EdgeInsets.only(right: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+        decoration: BoxDecoration(
+          color: const Color(0xFFD6F2DF),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text('En ligne',
+            style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.green.shade800)),
+      );
+}
+
+/// Publier / retirer toute une catégorie de MCS Boutique.
+class _CategoryPublishBar extends StatelessWidget {
+  const _CategoryPublishBar({
+    required this.category,
+    required this.total,
+    required this.published,
+    required this.onPublish,
+    required this.onUnpublish,
+  });
+
+  final String category;
+  final int total;
+  final int published;
+  final VoidCallback onPublish;
+  final VoidCallback onUnpublish;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+      padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(children: [
+        const Icon(Icons.storefront_outlined, size: 20),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text('$published / $total en ligne',
+              style: const TextStyle(fontWeight: FontWeight.w600)),
+        ),
+        if (published < total)
+          TextButton(onPressed: onPublish, child: const Text('Tout publier')),
+        if (published > 0)
+          TextButton(onPressed: onUnpublish, child: const Text('Tout retirer')),
+      ]),
+    );
   }
 }
