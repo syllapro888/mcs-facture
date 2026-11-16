@@ -971,6 +971,13 @@ class _SettingsTabState extends State<_SettingsTab>
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 4),
               Text('${products.publishedCount} article(s) publiés dans le catalogue.'),
+              if (cloud.onlineCount != null)
+                Text('${cloud.onlineCount} article(s) en ligne dans MCS Boutique.',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: cloud.onlineCount == products.publishedCount
+                            ? const Color(0xFF2E9E5B)
+                            : const Color(0xFFC62828))),
               const SizedBox(height: 6),
               if (cloud.syncing)
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

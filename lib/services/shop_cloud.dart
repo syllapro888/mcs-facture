@@ -74,6 +74,9 @@ class ShopCloud extends ChangeNotifier {
   DateTime? lastSync;
   String? syncError;
 
+  /// Nombre d'articles réellement en ligne après le dernier envoi.
+  int? onlineCount;
+
   final List<StreamSubscription> _subs = [];
   Timer? _debounce;
   bool _again = false;
@@ -251,12 +254,25 @@ class ShopCloud extends ChangeNotifier {
       syncDone = 0;
       notifyListeners();
 
+      // Un article en erreur (photo illisible…) ne bloque plus les autres.
+      final failed = <String>[];
+      Object? firstError;
       for (final e in toSend) {
-        await _sendProduct(e.key, e.value);
-        state[e.key] = _signature(e.value);
+        try {
+          await _sendProduct(e.key, e.value);
+          state[e.key] = _signature(e.value);
+          await db.setValue(_stateKey, jsonEncode(state));
+        } catch (err) {
+          failed.add(e.value.name);
+          firstError ??= err;
+        }
         syncDone++;
-        await db.setValue(_stateKey, jsonEncode(state));
         notifyListeners();
+      }
+      if (failed.isNotEmpty) {
+        syncError = '${failed.length} article(s) non envoyé(s) : '
+            '${failed.take(5).join(', ')}${failed.length > 5 ? '…' : ''} '
+            '($firstError)';
       }
       for (final pid in toRemove) {
         await _db.collection('products').doc(pid).delete();
@@ -267,6 +283,7 @@ class ShopCloud extends ChangeNotifier {
         notifyListeners();
       }
       lastSync = DateTime.now();
+      onlineCount = state.length;
     } catch (e) {
       syncError = '$e';
     } finally {

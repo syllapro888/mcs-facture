@@ -32,7 +32,13 @@ class _CatalogScreenState extends State<CatalogScreen> {
           final categories = <String>{for (final p in all) p.category}
               .where((c) => c.isNotEmpty)
               .toList()
-            ..sort();
+            ..sort((a, b) {
+              // « Autres… » en dernier.
+              final ao = a.toLowerCase().startsWith('autre');
+              final bo = b.toLowerCase().startsWith('autre');
+              if (ao != bo) return ao ? 1 : -1;
+              return a.compareTo(b);
+            });
           final q = _query.trim().toLowerCase();
           final list = all.where((p) {
             if (_category != null && p.category != _category) return false;
@@ -95,26 +101,63 @@ class _CatalogScreenState extends State<CatalogScreen> {
                         ? 'Les articles arrivent bientôt !'
                         : 'Aucun article trouvé.'),
               )
+            else if (_category == null && q.isEmpty)
+              // « Tout » : un rayon par catégorie, pour que chaque catégorie
+              // soit visible sans faire défiler tous les articles.
+              for (final c in [...categories, if (list.any((p) => p.category.isEmpty)) ''])
+                ..._section(c, list.where((p) => p.category == c).toList())
             else
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(14, 6, 14, 24),
-                sliver: SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 240,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 0.68,
-                  ),
-                  delegate: SliverChildBuilderDelegate(
-                    (_, i) => ProductCard(product: list[i]),
-                    childCount: list.length,
-                  ),
-                ),
-              ),
+              _grid(list),
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
           ]);
         },
       ),
     );
+  }
+
+  /// Grille d'articles.
+  Widget _grid(List<ShopProduct> items) => SliverPadding(
+        padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
+        sliver: SliverGrid(
+          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: 240,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            childAspectRatio: 0.68,
+          ),
+          delegate: SliverChildBuilderDelegate(
+            (_, i) => ProductCard(product: items[i]),
+            childCount: items.length,
+          ),
+        ),
+      );
+
+  /// Rayon : titre de la catégorie, ses 4 premiers articles et « Tout voir ».
+  List<Widget> _section(String category, List<ShopProduct> items) {
+    if (items.isEmpty) return const [];
+    final title = category.isEmpty ? 'Autres articles' : category;
+    return [
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 18, 6, 0),
+          child: Row(children: [
+            Expanded(
+              child: Text('$title (${items.length})',
+                  style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.dark)),
+            ),
+            if (items.length > 4 && category.isNotEmpty)
+              TextButton(
+                onPressed: () => setState(() => _category = category),
+                child: const Text('Tout voir ›'),
+              ),
+          ]),
+        ),
+      ),
+      _grid(items.length > 4 && category.isNotEmpty ? items.take(4).toList() : items),
+    ];
   }
 
   Widget _chip(String label, bool selected, VoidCallback onTap) => Padding(
