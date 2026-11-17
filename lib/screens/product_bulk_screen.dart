@@ -35,9 +35,13 @@ class _Draft {
 /// - mode caméra : photo, nom, prix, « Suivant » ;
 /// - lignes sans photo.
 class ProductBulkScreen extends StatefulWidget {
-  const ProductBulkScreen({super.key, this.start = BulkStart.empty, this.category});
+  const ProductBulkScreen(
+      {super.key, this.start = BulkStart.empty, this.category, this.shopOnly = false});
   final BulkStart start;
   final String? category;
+
+  /// Articles ajoutés au catalogue boutique (privé).
+  final bool shopOnly;
 
   @override
   State<ProductBulkScreen> createState() => _ProductBulkScreenState();
@@ -55,6 +59,7 @@ class _ProductBulkScreenState extends State<ProductBulkScreen> {
   void initState() {
     super.initState();
     _category = widget.category ?? ProductCategories.all.last;
+    _publish = widget.shopOnly;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       switch (widget.start) {
         case BulkStart.photos:
@@ -160,6 +165,7 @@ class _ProductBulkScreenState extends State<ProductBulkScreen> {
             price: CurrencyFormatter.parseAmount(filled[i].price.text) ?? 0,
             photoPath: filled[i].photo,
             published: _publish,
+            shopOnly: widget.shopOnly,
             createdAt: now.add(Duration(milliseconds: i)),
           ),
       ];
@@ -183,7 +189,10 @@ class _ProductBulkScreenState extends State<ProductBulkScreen> {
     final count = _rows.where((r) => !r.isEmpty).length;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Ajout rapide')),
+      appBar: AppBar(
+          title: Text(widget.shopOnly
+              ? 'Ajout rapide • catalogue boutique'
+              : 'Ajout rapide')),
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),

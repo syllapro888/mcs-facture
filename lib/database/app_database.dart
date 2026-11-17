@@ -6,6 +6,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 
 import '../models/china_order.dart';
+import '../models/job_expense.dart';
 import '../models/client.dart';
 import '../models/company_settings.dart';
 import '../models/invoice.dart';
@@ -18,7 +19,7 @@ class AppDatabase {
   AppDatabase._();
   static final AppDatabase instance = AppDatabase._();
 
-  static const _version = 3;
+  static const _version = 4;
   Database? _db;
 
   Future<Database> get db async {
@@ -45,6 +46,11 @@ class AppDatabase {
               'ALTER TABLE products ADD COLUMN published INTEGER NOT NULL DEFAULT 0');
           await _createChinaOrders(db);
         }
+        if (oldV < 4) {
+          await db.execute(
+              'ALTER TABLE products ADD COLUMN shop_only INTEGER NOT NULL DEFAULT 0');
+          await _createJobExpenses(db);
+        }
       },
     );
     _db = opened;
@@ -67,6 +73,7 @@ class AppDatabase {
         price INTEGER NOT NULL DEFAULT 0,
         photo_path TEXT,
         published INTEGER NOT NULL DEFAULT 0,
+        shop_only INTEGER NOT NULL DEFAULT 0,
         created_at TEXT
       )''');
     await db.execute('''
@@ -120,7 +127,25 @@ class AppDatabase {
         'CREATE INDEX idx_items_invoice ON invoice_items(invoice_id)');
     await _createFiles(db);
     await _createChinaOrders(db);
+    await _createJobExpenses(db);
   }
+
+  /// Dépenses de chantier (lignes et photos rangées en JSON).
+  static Future<void> _createJobExpenses(Database db) => db.execute('''
+      CREATE TABLE IF NOT EXISTS job_expenses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT,
+        owner TEXT,
+        place TEXT,
+        date TEXT NOT NULL,
+        status TEXT NOT NULL,
+        billed INTEGER NOT NULL DEFAULT 0,
+        notes TEXT,
+        lines TEXT,
+        photos TEXT,
+        created_at TEXT,
+        updated_at TEXT
+      )''');
 
   /// Commandes passées en Chine (articles et photos rangés en JSON).
   static Future<void> _createChinaOrders(Database db) => db.execute('''
@@ -267,6 +292,33 @@ class AppDatabase {
   Future<void> deleteChinaOrder(int id) async =>
       (await db).delete('china_orders', where: 'id = ?', whereArgs: [id]);
 
+  // ---------- Dépenses chantier ----------
+
+  Future<List<JobExpense>> jobExpenses() async {
+    final rows = await (await db)
+        .query('job_expenses', orderBy: 'date DESC, id DESC');
+    return rows.map(JobExpense.fromMap).toList();
+  }
+
+  Future<int> saveJobExpense(JobExpense e) async {
+    final d = await db;
+    final map = e.toMap()..remove('id');
+    if (e.id == null) return d.insert('job_expenses', map);
+    await d.update('job_expenses', map, where: 'id = ?', whereArgs: [e.id]);
+    return e.id!;
+  }
+
+  Future<void> deleteJobExpense(int id) async =>
+      (await db).delete('job_expenses', where: 'id = ?', whereArgs: [id]);
+
+  /// Range des produits dans le catalogue boutique (ou le principal).
+  Future<void> setShopOnly(List<int> ids, bool shopOnly) async {
+    if (ids.isEmpty) return;
+    await (await db).update('products', {'shop_only': shopOnly ? 1 : 0},
+        where: 'id IN (${List.filled(ids.length, '?').join(',')})',
+        whereArgs: ids);
+  }
+
   // ---------- Clients ----------
 
   Future<List<Client>> clients() async {
@@ -375,9 +427,10 @@ class AppDatabase {
     'invoices',
     'invoice_items',
     'china_orders',
+    'job_expenses',
   ];
 
-  static const _optionalTables = {'china_orders'};
+  static const _optionalTables = {'china_orders', 'job_expenses'};
 
   Future<Map<String, List<Map<String, Object?>>>> dumpAll() async {
     final d = await db;

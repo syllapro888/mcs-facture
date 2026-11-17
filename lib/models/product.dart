@@ -39,6 +39,9 @@ class Product {
   final int price; // FCFA
   final String? photoPath; // chemin relatif
   final bool published; // visible dans MCS Boutique
+  /// Catalogue boutique : n'apparaît pas au choix des articles d'une
+  /// facture / d'un devis (sauf bouton « Catalogue boutique »).
+  final bool shopOnly;
   final DateTime createdAt;
 
   const Product({
@@ -50,6 +53,7 @@ class Product {
     this.price = 0,
     this.photoPath,
     this.published = false,
+    this.shopOnly = false,
     required this.createdAt,
   });
 
@@ -63,6 +67,7 @@ class Product {
     String? photoPath,
     bool clearPhoto = false,
     bool? published,
+    bool? shopOnly,
     DateTime? createdAt,
   }) =>
       Product(
@@ -74,6 +79,7 @@ class Product {
         price: price ?? this.price,
         photoPath: clearPhoto ? null : (photoPath ?? this.photoPath),
         published: published ?? this.published,
+        shopOnly: shopOnly ?? this.shopOnly,
         createdAt: createdAt ?? this.createdAt,
       );
 
@@ -86,6 +92,7 @@ class Product {
         'price': price,
         'photo_path': photoPath,
         'published': published ? 1 : 0,
+        'shop_only': shopOnly ? 1 : 0,
         'created_at': createdAt.toIso8601String(),
       };
 
@@ -98,6 +105,7 @@ class Product {
         price: (m['price'] as num?)?.toInt() ?? 0,
         photoPath: m['photo_path'] as String?,
         published: ((m['published'] as num?) ?? 0) != 0,
+        shopOnly: ((m['shop_only'] as num?) ?? 0) != 0,
         createdAt: DateTime.tryParse((m['created_at'] as String?) ?? '') ??
             DateTime.now(),
       );
