@@ -8,8 +8,11 @@ import '../widgets/custom_text_field.dart';
 import '../widgets/product_image_picker.dart';
 
 class ProductFormScreen extends StatefulWidget {
-  const ProductFormScreen({super.key, this.product});
+  const ProductFormScreen({super.key, this.product, this.shopOnly = false});
   final Product? product;
+
+  /// Nouveau produit : dans le catalogue boutique ?
+  final bool shopOnly;
 
   @override
   State<ProductFormScreen> createState() => _ProductFormScreenState();
@@ -24,6 +27,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   late String _unit;
   String? _photo;
   bool _published = false;
+  bool _shopOnly = false;
   bool _saving = false;
 
   @override
@@ -37,7 +41,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _category = p?.category ?? ProductCategories.all.last;
     _unit = p?.unit ?? 'pièce';
     _photo = p?.photoPath;
-    _published = p?.published ?? false;
+    _published = p?.published ?? widget.shopOnly;
+    _shopOnly = p?.shopOnly ?? widget.shopOnly;
   }
 
   @override
@@ -63,6 +68,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         price: CurrencyFormatter.parseAmount(_price.text) ?? 0,
         photoPath: _photo,
         published: _published,
+        shopOnly: _shopOnly,
         createdAt: base.createdAt,
       );
       await context.read<ProductProvider>().save(p);
@@ -136,6 +142,19 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                 ),
               ),
             ]),
+            Card(
+              elevation: 0,
+              color: _shopOnly ? const Color(0xFFFFF4D6) : Colors.white,
+              child: SwitchListTile(
+                value: _shopOnly,
+                onChanged: (v) => setState(() => _shopOnly = v),
+                secondary: const Icon(Icons.lock_outline),
+                title: const Text('Catalogue boutique (privé)'),
+                subtitle: Text(_shopOnly
+                    ? 'Pas proposé dans les factures et devis'
+                    : 'Dans le catalogue principal'),
+              ),
+            ),
             Card(
               elevation: 0,
               color: _published ? const Color(0xFFE6F6EC) : Colors.white,

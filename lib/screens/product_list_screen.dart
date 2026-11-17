@@ -16,8 +16,11 @@ typedef PickedProduct = ({Product product, double quantity});
 /// (ou toute une catégorie d'un coup) puis « Ajouter » renvoie la liste
 /// des [PickedProduct].
 class ProductListScreen extends StatefulWidget {
-  const ProductListScreen({super.key, this.pickMode = false});
+  const ProductListScreen({super.key, this.pickMode = false, this.shopCatalog = false});
   final bool pickMode;
+
+  /// Ouvrir directement le catalogue boutique (privé).
+  final bool shopCatalog;
 
   @override
   State<ProductListScreen> createState() => _ProductListScreenState();
@@ -27,6 +30,9 @@ class _ProductListScreenState extends State<ProductListScreen> {
   String _query = '';
   String? _category;
 
+  /// true : catalogue boutique (privé), false : catalogue principal.
+  late bool _shop = widget.shopCatalog;
+
   /// Filtre « En ligne » : seulement les articles publiés dans la boutique.
   bool _onlyPublished = false;
 
@@ -35,7 +41,18 @@ class _ProductListScreenState extends State<ProductListScreen> {
 
   Future<void> _edit([Product? p]) async {
     await Navigator.push(context,
-        MaterialPageRoute(builder: (_) => ProductFormScreen(product: p)));
+        MaterialPageRoute(
+            builder: (_) => ProductFormScreen(product: p, shopOnly: _shop)));
+  }
+
+  Future<void> _move(Product p) async {
+    await context.read<ProductProvider>().setShopOnly([p], !p.shopOnly);
+    if (!mounted) return;
+    showMessage(
+        context,
+        p.shopOnly
+            ? '« ${p.name} » déplacé dans le catalogue principal'
+            : '« ${p.name} » déplacé dans le catalogue boutique');
   }
 
   /// Choix : un produit, ajout rapide, plusieurs photos, mode caméra.
@@ -82,7 +99,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
         context,
         MaterialPageRoute(
             builder: (_) =>
-                ProductBulkScreen(start: start, category: _category)));
+                ProductBulkScreen(start: start, category: _category, shopOnly: _shop)));
   }
 
   /// Copie d'un produit (pour un modèle proche) : on change seulement
@@ -96,6 +113,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
       price: p.price,
       photoPath: p.photoPath,
       published: p.published,
+      shopOnly: p.shopOnly,
       createdAt: DateTime.now(),
     );
     await Navigator.push(context,
@@ -177,7 +195,10 @@ class _ProductListScreenState extends State<ProductListScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ProductProvider>();
-    var list = provider.search(_query, category: _category);
+    var list = provider
+        .search(_query, category: _category)
+        .where((p) => p.shopOnly == _shop)
+        .toList();
     if (_onlyPublished) list = list.where((p) => p.published).toList();
     if (widget.pickMode) {
       // En mode choix : les plus chers en haut.
@@ -199,7 +220,9 @@ class _ProductListScreenState extends State<ProductListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-          title: Text(widget.pickMode ? 'Choisir des produits' : 'Catalogue')),
+          title: Text(widget.pickMode
+              ? 'Choisir des produits'
+              : (_shop ? 'Catalogue boutique' : 'Catalogue'))),
       floatingActionButton: widget.pickMode && pickedCount > 0
           ? null
           : FloatingActionButton.extended(
@@ -222,8 +245,44 @@ class _ProductListScreenState extends State<ProductListScreen> {
             )
           : null,
       body: Column(children: [
+        // Catalogue principal / catalogue boutique (privé).
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+          child: SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<bool>(
+              showSelectedIcon: false,
+              segments: [
+                ButtonSegment(
+                    value: false,
+                    icon: const Icon(Icons.inventory_2_outlined),
+                    label: Text('Catalogue (${provider.products.length - provider.shopOnlyCount})')),
+                ButtonSegment(
+                    value: true,
+                    icon: const Icon(Icons.lock_outline),
+                    label: Text('Boutique (${provider.shopOnlyCount})')),
+              ],
+              selected: {_shop},
+              onSelectionChanged: (v) => setState(() {
+                _shop = v.first;
+                _category = null;
+              }),
+            ),
+          ),
+        ),
+        if (_shop)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+            child: Text(
+              widget.pickMode
+                  ? 'Articles du catalogue boutique (privé).'
+                  : 'Catalogue privé : pas proposé dans les factures et devis, '
+                      'mais publiable dans MCS Boutique.',
+              style: const TextStyle(fontSize: 12, color: Colors.black54),
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
           child: TextField(
             decoration: const InputDecoration(
               prefixIcon: Icon(Icons.search),
@@ -353,6 +412,8 @@ class _ProductListScreenState extends State<ProductListScreen> {
                                         _duplicate(p);
                                       case 'publish':
                                         _setPublished([p], !p.published);
+                                      case 'move':
+                                        _move(p);
                                       case 'delete':
                                         _delete(p);
                                     }
@@ -368,6 +429,11 @@ class _ProductListScreenState extends State<ProductListScreen> {
                                         child: Text(p.published
                                             ? 'Retirer de MCS Boutique'
                                             : 'Publier dans MCS Boutique')),
+                                    PopupMenuItem(
+                                        value: 'move',
+                                        child: Text(p.shopOnly
+                                            ? 'Mettre dans le catalogue principal'
+                                            : 'Mettre dans le catalogue boutique')),
                                     const PopupMenuItem(
                                         value: 'delete',
                                         child: Text('Supprimer')),

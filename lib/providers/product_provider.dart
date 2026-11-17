@@ -52,6 +52,15 @@ class ProductProvider extends ChangeNotifier {
     await load();
   }
 
+  /// Déplace vers le catalogue boutique (true) ou le catalogue principal.
+  Future<void> setShopOnly(Iterable<Product> list, bool shopOnly) async {
+    await db.setShopOnly(
+        [for (final p in list) if (p.id != null) p.id!], shopOnly);
+    await load();
+  }
+
+  int get shopOnlyCount => _products.where((p) => p.shopOnly).length;
+
   int get publishedCount => _products.where((p) => p.published).length;
 
   Future<void> delete(Product p) async {

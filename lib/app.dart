@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'database/app_database.dart';
 import 'providers/china_order_provider.dart';
 import 'providers/client_provider.dart';
+import 'providers/job_expense_provider.dart';
 import 'providers/invoice_provider.dart';
 import 'providers/product_provider.dart';
 import 'providers/settings_provider.dart';
@@ -31,6 +32,7 @@ class McsApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ClientProvider(db)..load()),
         ChangeNotifierProvider(create: (_) => InvoiceProvider(db)..load()),
         ChangeNotifierProvider(create: (_) => ChinaOrderProvider(db)..load()),
+        ChangeNotifierProvider(create: (_) => JobExpenseProvider(db)..load()),
         ChangeNotifierProvider.value(value: ShopCloud.instance),
       ],
       child: MaterialApp(
