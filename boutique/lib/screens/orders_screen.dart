@@ -164,7 +164,7 @@ class _OrderCardState extends State<_OrderCard> {
               style: const TextStyle(color: Colors.black54, fontSize: 12)),
           const SizedBox(height: 8),
           for (final l in o.items)
-            Text('${l.qty} × ${l.name}',
+            Text('${l.qty} × ${l.name}${l.negotiated ? '  🤝 prix négocié' : ''}',
                 maxLines: 1, overflow: TextOverflow.ellipsis),
           const SizedBox(height: 6),
           Row(children: [

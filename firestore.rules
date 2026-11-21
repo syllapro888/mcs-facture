@@ -66,6 +66,40 @@ service cloud.firestore {
       allow delete: if isOwner();
     }
 
+    // Discussion de prix : le client propose un prix pour un article,
+    // MCS VISION accepte, refuse ou fait une contre-offre.
+    match /offers/{id} {
+      allow read: if signedIn()
+        && (resource.data.uid == request.auth.uid || isOwner());
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'attente'
+        && request.resource.data.price is int
+        && request.resource.data.price > 0
+        && !('counter' in request.resource.data);
+      // Le client peut seulement : annuler son offre en attente, répondre
+      // à une contre-offre (au prix proposé par MCS VISION), ou marquer
+      // l'offre acceptée comme commandée.
+      allow update: if isOwner()
+        || (signedIn()
+          && resource.data.uid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status', 'price', 'updatedAt'])
+          && ((resource.data.status == 'attente'
+                && request.resource.data.status == 'annulee'
+                && request.resource.data.price == resource.data.price)
+            || (resource.data.status == 'contre'
+                && request.resource.data.status == 'acceptee'
+                && request.resource.data.price == resource.data.counter)
+            || (resource.data.status == 'contre'
+                && request.resource.data.status == 'refusee'
+                && request.resource.data.price == resource.data.price)
+            || (resource.data.status == 'acceptee'
+                && request.resource.data.status == 'utilisee'
+                && request.resource.data.price == resource.data.price)));
+      allow delete: if isOwner();
+    }
+
     // Discussion : une conversation par client.
     match /chats/{uid} {
       allow read, write: if signedIn() && (request.auth.uid == uid || isOwner());

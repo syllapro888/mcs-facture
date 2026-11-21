@@ -99,7 +99,7 @@ class ShopScreen extends StatelessWidget {
       );
     }
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Boutique en ligne'),
@@ -107,6 +107,8 @@ class ShopScreen extends StatelessWidget {
             labelColor: AppColors.yellow,
             unselectedLabelColor: Colors.white70,
             indicatorColor: AppColors.yellow,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
             tabs: [
               Tab(
                   child: Badge(
@@ -118,6 +120,11 @@ class ShopScreen extends StatelessWidget {
                       isLabelVisible: cloud.unreadChats > 0,
                       label: Text('${cloud.unreadChats}'),
                       child: const Text('Messages'))),
+              Tab(
+                  child: Badge(
+                      isLabelVisible: cloud.pendingOffers > 0,
+                      label: Text('${cloud.pendingOffers}'),
+                      child: const Text('Offres'))),
               const Tab(text: 'Réglages'),
             ],
           ),
@@ -125,6 +132,7 @@ class ShopScreen extends StatelessWidget {
         body: const TabBarView(children: [
           _OrdersTab(),
           _ChatsTab(),
+          _OffersTab(),
           _SettingsTab(),
         ]),
       ),
@@ -503,7 +511,9 @@ class _OrderScreen extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 3),
                   child: Row(children: [
-                    Expanded(child: Text('${i['qty']} × ${i['name']}')),
+                    Expanded(
+                        child: Text('${i['qty']} × ${i['name']}'
+                            '${i['offerId'] != null ? '\n🤝 Prix négocié (affiché : ${CurrencyFormatter.fcfa(_int(i['listPrice']))})' : ''}')),
                     Text(CurrencyFormatter.fcfa(_int(i['price']) * _int(i['qty']))),
                   ]),
                 ),
@@ -820,7 +830,8 @@ class _Bubble extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                    '🛒 $product${_int(m['productPrice']) > 0 ? '\n${CurrencyFormatter.fcfa(_int(m['productPrice']))}' : ''}',
+                    '🛒 $product${_int(m['productPrice']) > 0 ? '\n${CurrencyFormatter.fcfa(_int(m['productPrice']))}' : ''}'
+                    '${m['offerPrice'] != null ? '\n💰 Offre du client : ${CurrencyFormatter.fcfa(_int(m['offerPrice']))}' : ''}',
                     style: const TextStyle(
                         color: AppColors.dark, fontWeight: FontWeight.w600)),
               ),
@@ -844,6 +855,272 @@ class _Bubble extends StatelessWidget {
                     color: mine ? Colors.white60 : Colors.black45)),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ======================= Offres (discussion de prix) =======================
+
+const _offerLabels = {
+  'attente': 'À traiter',
+  'contre': 'Contre-offre',
+  'acceptee': 'Acceptées',
+  'utilisee': 'Commandées',
+  'refusee': 'Refusées',
+  'annulee': 'Annulées',
+};
+
+Color _offerColor(String s) => switch (s) {
+      'acceptee' || 'utilisee' => const Color(0xFF2E9E5B),
+      'refusee' || 'annulee' => const Color(0xFFC62828),
+      'contre' => AppColors.light,
+      _ => AppColors.yellow,
+    };
+
+class _OffersTab extends StatefulWidget {
+  const _OffersTab();
+
+  @override
+  State<_OffersTab> createState() => _OffersTabState();
+}
+
+class _OffersTabState extends State<_OffersTab>
+    with AutomaticKeepAliveClientMixin {
+  late final _stream = ShopCloud.instance.offers();
+  String? _filter = 'attente';
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return Column(children: [
+      SizedBox(
+        height: 52,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+          children: [
+            for (final e in {null: 'Toutes', ..._offerLabels}.entries)
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: ChoiceChip(
+                  label: Text(e.value),
+                  selected: _filter == e.key,
+                  onSelected: (_) => setState(() => _filter = e.key),
+                ),
+              ),
+          ],
+        ),
+      ),
+      Expanded(
+        child: StreamBuilder<List<DocumentSnapshot<Map<String, dynamic>>>>(
+          stream: _stream,
+          builder: (_, snap) {
+            if (snap.hasError) {
+              return _Info(
+                  icon: Icons.error_outline, text: 'Erreur : ${snap.error}');
+            }
+            if (!snap.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final list = snap.data!
+                .where((d) => _filter == null || d.data()?['status'] == _filter)
+                .toList();
+            if (list.isEmpty) {
+              return const _Info(
+                  icon: Icons.local_offer_outlined,
+                  text: 'Aucune proposition de prix ici.\n'
+                      'Les clients peuvent proposer un prix depuis la fiche '
+                      'd’un article dans MCS Boutique.');
+            }
+            return ListView.builder(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
+              itemCount: list.length,
+              itemBuilder: (_, i) => _OfferCard(doc: list[i]),
+            );
+          },
+        ),
+      ),
+    ]);
+  }
+}
+
+class _OfferCard extends StatelessWidget {
+  const _OfferCard({required this.doc});
+  final DocumentSnapshot<Map<String, dynamic>> doc;
+
+  Future<void> _answer(BuildContext context, String status,
+      {int? counter}) async {
+    try {
+      await ShopCloud.instance.answerOffer(doc, status, counter: counter);
+      if (context.mounted) {
+        showMessage(
+            context,
+            switch (status) {
+              'acceptee' => 'Offre acceptée : le client peut commander.',
+              'contre' => 'Contre-offre envoyée au client.',
+              _ => 'Offre refusée.',
+            });
+      }
+    } catch (e) {
+      if (context.mounted) showMessage(context, 'Erreur : $e', error: true);
+    }
+  }
+
+  Future<void> _counter(BuildContext context, int listPrice, int price) async {
+    final ctrl = TextEditingController();
+    final value = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Contre-offre'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('Prix affiché : ${CurrencyFormatter.fcfa(listPrice)}\n'
+              'Proposé par le client : ${CurrencyFormatter.fcfa(price)}'),
+          const SizedBox(height: 12),
+          TextField(
+            controller: ctrl,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+                labelText: 'Votre prix (par unité)', suffixText: 'FCFA'),
+          ),
+        ]),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Annuler')),
+          FilledButton(
+            onPressed: () {
+              final v =
+                  int.tryParse(ctrl.text.replaceAll(RegExp(r'\D'), ''));
+              if (v == null || v <= 0) return;
+              Navigator.pop(ctx, v);
+            },
+            child: const Text('Envoyer'),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    if (value != null && context.mounted) {
+      await _answer(context, 'contre', counter: value);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final m = doc.data() ?? const {};
+    final status = _str(m['status']);
+    final listPrice = _int(m['listPrice']);
+    final price = _int(m['price']);
+    final qty = _int(m['qty']) <= 0 ? 1 : _int(m['qty']);
+    final counter = m['counter'] == null ? null : _int(m['counter']);
+    final discount =
+        listPrice <= 0 ? 0 : ((listPrice - price) * 100 / listPrice).round();
+    final name =
+        _str(m['clientName']).isEmpty ? 'Client' : _str(m['clientName']);
+    final color = _offerColor(status);
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(
+              child: Text(_str(m['productName']),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 15)),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(8)),
+              child: Text(_offerLabels[status] ?? status,
+                  style: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w600)),
+            ),
+          ]),
+          Text(
+              '$name • ${DateFormat('dd/MM HH:mm').format(_date(m['createdAt']))}'
+              '${_str(m['phone']).isNotEmpty ? ' • ${_str(m['phone'])}' : ''}',
+              style: const TextStyle(color: Colors.black54, fontSize: 12)),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(
+              child: Text('Prix affiché : ${CurrencyFormatter.fcfa(listPrice)}\n'
+                  'Quantité : $qty ${_str(m['unit'])}'),
+            ),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text(CurrencyFormatter.fcfa(price),
+                  style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.dark)),
+              if (discount > 0)
+                Text('-$discount %',
+                    style: TextStyle(
+                        color: discount >= 20
+                            ? Colors.red.shade700
+                            : Colors.black54,
+                        fontWeight: FontWeight.w600)),
+            ]),
+          ]),
+          if (counter != null && status == 'contre')
+            Text('Votre contre-offre : ${CurrencyFormatter.fcfa(counter)}',
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+          if (_str(m['note']).isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('« ${_str(m['note'])} »',
+                  style: const TextStyle(fontStyle: FontStyle.italic)),
+            ),
+          if (status == 'attente') ...[
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(
+                child: FilledButton(
+                  onPressed: () => _answer(context, 'acceptee'),
+                  child: const Text('Accepter'),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => _counter(context, listPrice, price),
+                  child: const Text('Contre-offre'),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red.shade700),
+                  onPressed: () => _answer(context, 'refusee'),
+                  child: const Text('Refuser'),
+                ),
+              ),
+            ]),
+          ],
+          if (_str(m['uid']).isNotEmpty)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) =>
+                            ShopChatScreen(uid: _str(m['uid']), name: name))),
+                icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                label: const Text('Discuter'),
+              ),
+            ),
+        ]),
       ),
     );
   }

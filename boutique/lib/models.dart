@@ -145,17 +145,31 @@ class OrderLine {
   final int qty;
   final String unit;
 
+  /// Prix négocié : offre acceptée et prix affiché d'origine.
+  final String? offerId;
+  final int? listPrice;
+
   const OrderLine(
       {required this.pid,
       required this.name,
       required this.price,
       required this.qty,
-      this.unit = 'pièce'});
+      this.unit = 'pièce',
+      this.offerId,
+      this.listPrice});
 
   int get total => price * qty;
+  bool get negotiated => offerId != null;
 
-  Map<String, Object?> toMap() =>
-      {'pid': pid, 'name': name, 'price': price, 'qty': qty, 'unit': unit};
+  Map<String, Object?> toMap() => {
+        'pid': pid,
+        'name': name,
+        'price': price,
+        'qty': qty,
+        'unit': unit,
+        if (offerId != null) 'offerId': offerId,
+        if (listPrice != null) 'listPrice': listPrice,
+      };
 
   factory OrderLine.fromMap(Map m) => OrderLine(
         pid: (m['pid'] as String?) ?? '',
@@ -163,7 +177,82 @@ class OrderLine {
         price: (m['price'] as num?)?.toInt() ?? 0,
         qty: (m['qty'] as num?)?.toInt() ?? 1,
         unit: (m['unit'] as String?) ?? 'pièce',
+        offerId: m['offerId'] as String?,
+        listPrice: (m['listPrice'] as num?)?.toInt(),
       );
+}
+
+/// Étapes d'une proposition de prix.
+enum OfferStatus {
+  attente('En attente de réponse'),
+  contre('Contre-offre de MCS VISION'),
+  acceptee('Acceptée'),
+  refusee('Refusée'),
+  annulee('Annulée'),
+  utilisee('Commandée');
+
+  const OfferStatus(this.label);
+  final String label;
+
+  static OfferStatus parse(String? v) => OfferStatus.values
+      .firstWhere((s) => s.name == v, orElse: () => OfferStatus.attente);
+}
+
+/// Prix proposé par un client pour un article (discussion de prix).
+class PriceOffer {
+  final String id;
+  final String uid;
+  final String pid;
+  final String productName;
+  final int listPrice; // prix affiché
+  final int price; // prix proposé par le client (ou contre-offre acceptée)
+  final int? counter; // contre-offre de MCS VISION
+  final int qty;
+  final String unit;
+  final OfferStatus status;
+  final DateTime createdAt;
+
+  const PriceOffer({
+    required this.id,
+    required this.uid,
+    required this.pid,
+    required this.productName,
+    required this.listPrice,
+    required this.price,
+    this.counter,
+    this.qty = 1,
+    this.unit = 'pièce',
+    this.status = OfferStatus.attente,
+    required this.createdAt,
+  });
+
+  /// Offre encore en cours (ni refusée, ni annulée, ni commandée).
+  bool get open =>
+      status == OfferStatus.attente ||
+      status == OfferStatus.contre ||
+      status == OfferStatus.acceptee;
+
+  /// Réduction obtenue par rapport au prix affiché, en %.
+  int get discountPercent => listPrice <= 0
+      ? 0
+      : ((listPrice - price) * 100 / listPrice).round().clamp(0, 100);
+
+  factory PriceOffer.fromDoc(DocumentSnapshot<Map<String, dynamic>> d) {
+    final m = d.data() ?? const {};
+    return PriceOffer(
+      id: d.id,
+      uid: (m['uid'] as String?) ?? '',
+      pid: (m['pid'] as String?) ?? '',
+      productName: (m['productName'] as String?) ?? '',
+      listPrice: (m['listPrice'] as num?)?.toInt() ?? 0,
+      price: (m['price'] as num?)?.toInt() ?? 0,
+      counter: (m['counter'] as num?)?.toInt(),
+      qty: (m['qty'] as num?)?.toInt() ?? 1,
+      unit: (m['unit'] as String?) ?? 'pièce',
+      status: OfferStatus.parse(m['status'] as String?),
+      createdAt: _date(m['createdAt']),
+    );
+  }
 }
 
 class ShopOrder {
@@ -230,6 +319,7 @@ class ChatMessage {
   final String text;
   final String? productName;
   final int? productPrice;
+  final int? offerPrice; // prix proposé (discussion de prix)
   final String? image;
   final DateTime createdAt;
 
@@ -239,6 +329,7 @@ class ChatMessage {
     required this.text,
     this.productName,
     this.productPrice,
+    this.offerPrice,
     this.image,
     required this.createdAt,
   });
@@ -251,6 +342,7 @@ class ChatMessage {
       text: (m['text'] as String?) ?? '',
       productName: m['productName'] as String?,
       productPrice: (m['productPrice'] as num?)?.toInt(),
+      offerPrice: (m['offerPrice'] as num?)?.toInt(),
       image: m['image'] as String?,
       createdAt: _date(m['createdAt']),
     );

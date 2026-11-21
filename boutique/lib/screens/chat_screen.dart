@@ -245,7 +245,8 @@ class _Bubble extends StatelessWidget {
                 ),
                 child: Text(
                   '🛒 ${m.productName}'
-                  '${m.productPrice != null && m.productPrice! > 0 ? '\n${fcfa(m.productPrice!)}' : ''}',
+                  '${m.productPrice != null && m.productPrice! > 0 ? '\n${fcfa(m.productPrice!)}' : ''}'
+                  '${m.offerPrice != null ? '\n💰 Offre : ${fcfa(m.offerPrice!)}' : ''}',
                   style: TextStyle(
                       color: mine ? Colors.white : AppColors.dark,
                       fontWeight: FontWeight.w600),

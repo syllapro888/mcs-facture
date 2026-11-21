@@ -15,6 +15,7 @@ import '../models/product.dart';
 import '../providers/product_provider.dart';
 import '../providers/settings_provider.dart';
 import '../utils/app_paths.dart';
+import '../utils/currency_formatter.dart';
 
 /// Réduit une photo en JPEG (en arrière-plan) : (octets, largeur max, qualité).
 Uint8List? _resize((Uint8List, int, int) a) {
@@ -66,6 +67,7 @@ class ShopCloud extends ChangeNotifier {
   /// Commandes en attente et discussions non lues (pastilles).
   int pendingOrders = 0;
   int unreadChats = 0;
+  int pendingOffers = 0;
 
   // Synchronisation du catalogue.
   bool syncing = false;
@@ -132,7 +134,16 @@ class ShopCloud extends ChangeNotifier {
     _subs.clear();
     pendingOrders = 0;
     unreadChats = 0;
+    pendingOffers = 0;
     if (!isOwner) return;
+    _subs.add(_db
+        .collection('offers')
+        .where('status', isEqualTo: 'attente')
+        .snapshots()
+        .listen((s) {
+      pendingOffers = s.size;
+      notifyListeners();
+    }, onError: (_) {}));
     _subs.add(_db
         .collection('orders')
         .where('status', isEqualTo: 'attente')
@@ -353,6 +364,60 @@ class ShopCloud extends ChangeNotifier {
         'ownerSeen': true,
         'updatedAt': FieldValue.serverTimestamp(),
       });
+
+  // ---------- Discussion de prix ----------
+
+  Stream<List<DocumentSnapshot<Map<String, dynamic>>>> offers() => _db
+      .collection('offers')
+      .orderBy('createdAt', descending: true)
+      .limit(300)
+      .snapshots()
+      .map((s) => s.docs);
+
+  /// Répond à une proposition de prix : 'acceptee', 'refusee' ou 'contre'
+  /// (avec [counter]). Le client est prévenu dans sa discussion.
+  Future<void> answerOffer(DocumentSnapshot<Map<String, dynamic>> offer,
+      String status,
+      {int? counter, String note = ''}) async {
+    final m = offer.data() ?? const {};
+    final uid = (m['uid'] as String?) ?? '';
+    final product = (m['productName'] as String?) ?? '';
+    final price = (m['price'] as num?)?.toInt() ?? 0;
+    String f(int v) => CurrencyFormatter.fcfa(v);
+    final text = switch (status) {
+      'acceptee' => '✅ Offre acceptée : ${f(price)} pour « $product ». '
+          'Ouvrez l’article et appuyez sur « Commander ».',
+      'contre' => '💬 Contre-offre pour « $product » : ${f(counter ?? price)} '
+          '(au lieu de ${f(price)}). Répondez depuis la fiche de l’article.',
+      _ => '❌ Désolé, nous ne pouvons pas accepter ${f(price)} '
+          'pour « $product ».',
+    };
+    final batch = _db.batch();
+    batch.update(offer.reference, {
+      'status': status,
+      if (status == 'contre') 'counter': counter,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    if (uid.isNotEmpty) {
+      final chat = _db.collection('chats').doc(uid);
+      final full = note.isEmpty ? text : '$text\n$note';
+      batch.set(chat.collection('messages').doc(), {
+        'from': 'owner',
+        'text': full,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      batch.set(
+          chat,
+          {
+            'lastText': full,
+            'lastFrom': 'owner',
+            'lastAt': FieldValue.serverTimestamp(),
+            'unreadClient': FieldValue.increment(1),
+          },
+          SetOptions(merge: true));
+    }
+    await batch.commit();
+  }
 
   // ---------- Discussions ----------
 
