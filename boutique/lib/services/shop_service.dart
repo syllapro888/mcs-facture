@@ -55,7 +55,8 @@ class ShopService {
     String? proof,
   }) async {
     final ref = _db.collection('orders').doc();
-    await ref.set({
+    final batch = _db.batch();
+    batch.set(ref, {
       'uid': uid,
       'clientName': clientName,
       'phone': phone,
@@ -71,8 +72,98 @@ class ShopService {
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
+    // Un prix négocié ne sert qu'une fois.
+    for (final i in items) {
+      if (i.offerId != null) {
+        batch.update(_db.collection('offers').doc(i.offerId), {
+          'status': OfferStatus.utilisee.name,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+    }
+    await batch.commit();
     return ref.id;
   }
+
+  // ---------- Discussion de prix ----------
+
+  static Stream<List<PriceOffer>> myOffers(String uid) => _db
+      .collection('offers')
+      .where('uid', isEqualTo: uid)
+      .snapshots()
+      .map((s) => s.docs.map(PriceOffer.fromDoc).toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt)));
+
+  /// Le client propose un prix : l'offre est enregistrée et apparaît aussi
+  /// dans la discussion pour prévenir MCS VISION.
+  static Future<void> proposePrice({
+    required String uid,
+    required String clientName,
+    required String phone,
+    required ShopProduct product,
+    required int price,
+    required int qty,
+    String note = '',
+  }) async {
+    final offer = _db.collection('offers').doc();
+    final chat = _db.collection('chats').doc(uid);
+    final text = 'Je propose ${fcfa(price)} au lieu de ${fcfa(product.price)}'
+        '${qty > 1 ? ' (× $qty ${product.unit})' : ''}.'
+        '${note.isNotEmpty ? '\n$note' : ''}';
+    final batch = _db.batch();
+    batch.set(offer, {
+      'uid': uid,
+      'clientName': clientName,
+      'phone': phone,
+      'pid': product.id,
+      'productName': product.name,
+      'listPrice': product.price,
+      'price': price,
+      'qty': qty,
+      'unit': product.unit,
+      'note': note,
+      'status': OfferStatus.attente.name,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    batch.set(chat.collection('messages').doc(), {
+      'from': 'client',
+      'text': text,
+      'pid': product.id,
+      'productName': product.name,
+      'productPrice': product.price,
+      'offerId': offer.id,
+      'offerPrice': price,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    batch.set(
+        chat,
+        {
+          'uid': uid,
+          'clientName': clientName,
+          'phone': phone,
+          'lastText': '💰 Offre : ${fcfa(price)} • ${product.name}',
+          'lastFrom': 'client',
+          'lastAt': FieldValue.serverTimestamp(),
+          'unreadOwner': FieldValue.increment(1),
+        },
+        SetOptions(merge: true));
+    await batch.commit();
+  }
+
+  static Future<void> cancelOffer(PriceOffer o) =>
+      _db.collection('offers').doc(o.id).update({
+        'status': OfferStatus.annulee.name,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+  /// Réponse du client à une contre-offre de MCS VISION.
+  static Future<void> answerCounter(PriceOffer o, {required bool accept}) =>
+      _db.collection('offers').doc(o.id).update({
+        'status': (accept ? OfferStatus.acceptee : OfferStatus.refusee).name,
+        if (accept && o.counter != null) 'price': o.counter,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
 
   static Future<void> addProof(String orderId, String proof) =>
       _db.collection('orders').doc(orderId).update({
@@ -233,26 +324,60 @@ class Session extends ChangeNotifier {
   }
 }
 
+/// Ligne du panier. Un article au prix négocié a sa propre ligne,
+/// avec la quantité fixée par l'offre acceptée.
+class CartLine {
+  final ShopProduct product;
+  final int qty;
+  final PriceOffer? offer;
+
+  const CartLine(this.product, this.qty, [this.offer]);
+
+  String get key => offer == null ? product.id : 'offer:${offer!.id}';
+  int get unitPrice => offer?.price ?? product.price;
+  int get total => unitPrice * qty;
+  bool get negotiated => offer != null;
+
+  OrderLine toOrderLine() => OrderLine(
+        pid: product.id,
+        name: product.name,
+        price: unitPrice,
+        qty: qty,
+        unit: product.unit,
+        offerId: offer?.id,
+        listPrice: offer == null ? null : product.price,
+      );
+}
+
 /// Panier.
 class Cart extends ChangeNotifier {
-  final Map<String, (ShopProduct, int)> _lines = {};
+  final Map<String, CartLine> _lines = {};
 
-  List<(ShopProduct, int)> get lines => _lines.values.toList();
-  int get count => _lines.values.fold(0, (s, l) => s + l.$2);
-  int get total => _lines.values.fold(0, (s, l) => s + l.$1.price * l.$2);
+  List<CartLine> get lines => _lines.values.toList();
+  int get count => _lines.values.fold(0, (s, l) => s + l.qty);
+  int get total => _lines.values.fold(0, (s, l) => s + l.total);
   bool get isEmpty => _lines.isEmpty;
 
   void add(ShopProduct p, [int qty = 1]) {
-    final cur = _lines[p.id]?.$2 ?? 0;
-    _lines[p.id] = (p, cur + qty);
+    final cur = _lines[p.id]?.qty ?? 0;
+    _lines[p.id] = CartLine(p, cur + qty);
     notifyListeners();
   }
 
-  void setQty(ShopProduct p, int qty) {
+  /// Ajoute un article au prix accepté par MCS VISION.
+  void addOffer(ShopProduct p, PriceOffer o) {
+    final line = CartLine(p, o.qty, o);
+    _lines[line.key] = line;
+    notifyListeners();
+  }
+
+  bool hasOffer(String offerId) => _lines.containsKey('offer:$offerId');
+
+  void setQty(CartLine line, int qty) {
     if (qty <= 0) {
-      _lines.remove(p.id);
-    } else {
-      _lines[p.id] = (p, qty);
+      _lines.remove(line.key);
+    } else if (!line.negotiated) {
+      _lines[line.key] = CartLine(line.product, qty);
     }
     notifyListeners();
   }
@@ -262,10 +387,8 @@ class Cart extends ChangeNotifier {
     notifyListeners();
   }
 
-  List<OrderLine> toOrderLines() => [
-        for (final (p, q) in _lines.values)
-          OrderLine(pid: p.id, name: p.name, price: p.price, qty: q, unit: p.unit)
-      ];
+  List<OrderLine> toOrderLines() =>
+      [for (final l in _lines.values) l.toOrderLine()];
 }
 
 /// Message d'erreur Firebase compréhensible.

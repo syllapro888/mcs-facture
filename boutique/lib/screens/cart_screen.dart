@@ -74,7 +74,7 @@ class CartScreen extends StatelessWidget {
           : ListView(
               padding: const EdgeInsets.all(12),
               children: [
-                for (final (p, q) in cart.lines)
+                for (final l in cart.lines)
                   Card(
                     elevation: 0,
                     color: Colors.white,
@@ -83,19 +83,35 @@ class CartScreen extends StatelessWidget {
                       child: Row(children: [
                         ClipRRect(
                           borderRadius: BorderRadius.circular(10),
-                          child: B64Image(p.thumb, width: 70, height: 70),
+                          child: B64Image(l.product.thumb, width: 70, height: 70),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(p.name,
+                              Text(l.product.name,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                       fontWeight: FontWeight.w600)),
-                              Text(fcfa(p.price * q),
+                              if (l.negotiated)
+                                Text.rich(TextSpan(children: [
+                                  const TextSpan(
+                                      text: '🤝 Prix négocié  ',
+                                      style: TextStyle(
+                                          color: AppColors.green,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600)),
+                                  TextSpan(
+                                      text: fcfa(l.product.price * l.qty),
+                                      style: const TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.black45,
+                                          decoration:
+                                              TextDecoration.lineThrough)),
+                                ])),
+                              Text(fcfa(l.total),
                                   style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                       color: AppColors.dark)),
@@ -103,12 +119,21 @@ class CartScreen extends StatelessWidget {
                           ),
                         ),
                         Column(children: [
-                          QtyStepper(
-                              value: q,
-                              onChanged: (v) =>
-                                  context.read<Cart>().setQty(p, v)),
+                          if (l.negotiated)
+                            Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: Text('× ${l.qty}',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16)),
+                            )
+                          else
+                            QtyStepper(
+                                value: l.qty,
+                                onChanged: (v) =>
+                                    context.read<Cart>().setQty(l, v)),
                           TextButton(
-                            onPressed: () => context.read<Cart>().setQty(p, 0),
+                            onPressed: () => context.read<Cart>().setQty(l, 0),
                             child: const Text('Retirer'),
                           ),
                         ]),
@@ -296,7 +321,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 3),
                 child: Row(children: [
-                  Expanded(child: Text('${l.qty} × ${l.name}')),
+                  Expanded(
+                      child: Text('${l.qty} × ${l.name}'
+                          '${l.negotiated ? '  (prix négocié)' : ''}')),
                   Text(fcfa(l.total),
                       style: const TextStyle(fontWeight: FontWeight.w600)),
                 ]),
